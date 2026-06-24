@@ -13,15 +13,35 @@ RichUI. This is the user-facing surface; everything substantive is in core/.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
 from rich.console import Console
 
-from ..core import AgentConfig, LLMClient, ReActLoop
+from ..core import AgentConfig, ReActLoop, create_client
 from ..skills import ANALYZE
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
+
+
+def _default_model() -> str:
+    """Pick a sensible default model for the active provider.
+
+    Read from LLM_MODEL if set, otherwise infer from LLM_PROVIDER (deepseek-chat
+    for OpenAI-compat, claude-sonnet-4-5 for Anthropic).
+    """
+    if m := os.environ.get("LLM_MODEL"):
+        return m
+    if os.environ.get("LLM_PROVIDER", "anthropic").lower() in (
+        "openai-compat",
+        "deepseek",
+        "ollama",
+        "openai",
+    ):
+        return "deepseek-chat"
+    return "claude-sonnet-4-5"
+
 
 app = typer.Typer(
     name="refactor-agent",
@@ -44,7 +64,7 @@ def _resolve_workdir(path: Path) -> str:
 @app.command()
 def analyze(
     project: Path = typer.Argument(..., help="Path to the target project."),
-    model: str = typer.Option("claude-sonnet-4-5", "--model", "-m"),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
     max_iterations: int = typer.Option(20, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
@@ -52,7 +72,7 @@ def analyze(
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]analyzing[/bold] {workdir}")
 
-    client = LLMClient()
+    client = create_client()
     loop = ReActLoop(
         client=client,
         config=AgentConfig(model=model, system_prompt=ANALYZE, max_iterations=max_iterations),
@@ -73,7 +93,7 @@ def analyze(
 def ask(
     project: Path = typer.Argument(..., help="Path to the target project."),
     task: str = typer.Argument(..., help="The task for the agent."),
-    model: str = typer.Option("claude-sonnet-4-5", "--model", "-m"),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
     max_iterations: int = typer.Option(30, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     read_only: bool = typer.Option(False, "--read-only", help="Disable mutation/shell tools."),
@@ -82,7 +102,7 @@ def ask(
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]agent task[/bold] on {workdir}")
 
-    client = LLMClient()
+    client = create_client()
     tools = read_only_tools() if read_only else default_tools()
     loop = ReActLoop(
         client=client,

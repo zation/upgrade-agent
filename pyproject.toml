@@ -8,8 +8,9 @@ authors = [{ name = "liuyang" }]
 license = { text = "MIT" }
 
 dependencies = [
-    # LLM
+    # LLM — both SDKs supported; which one is active depends on LLM_PROVIDER env var
     "anthropic>=0.40.0",
+    "openai>=1.50.0",
     # Orchestration (M3+)
     "langgraph>=0.2.60",
     # Schema / structured output

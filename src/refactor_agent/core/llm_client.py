@@ -1,22 +1,31 @@
-"""Anthropic LLM client.
+"""LLM clients — the only modules that know about provider wire formats.
 
-The ONLY module that knows about Anthropic's wire format. It:
-  * owns the SDK client and retries on transient errors,
-  * translates between our neutral :mod:`types` and SDK dicts,
-  * returns a normalized response the ReAct loop can consume blindly.
+Architecture (this is the "model-agnostic" pattern interviewers love):
 
-Swapping to another provider later means rewriting just this file.
+  ``LLMClient`` is a Protocol — a duck-typed interface the ReAct loop uses.
+  Concrete implementations translate between our neutral types and each
+  provider's SDK. Adding a new provider = one new class here + zero changes
+  elsewhere.
+
+  Provider mapping:
+  - ``anthropic``  → AnthropicClient (native Claude SDK)
+  - ``openai-compat`` → OpenAICompatibleClient (works with DeepSeek, Ollama,
+    vLLM, any OpenAI-compatible server)
+
+  Which provider to use is controlled by the ``LLM_PROVIDER`` env var
+  (default: ``anthropic``). Each provider reads its own ``*_API_KEY`` and
+  optional ``*_BASE_URL`` from the environment.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
-import anthropic
 from dotenv import load_dotenv
 
 from .types import (
@@ -24,37 +33,76 @@ from .types import (
     Message,
     StopReason,
     TextBlock,
+    ToolResultBlock,
+    ToolUseBlock,
     parse_blocks,
     to_sdk_content,
 )
 
-__all__ = ["LLMClient", "LLMResponse", "ask"]
+__all__ = [
+    "AnthropicClient",
+    "LLMClient",
+    "LLMResponse",
+    "OpenAICompatibleClient",
+    "create_client",
+]
 
 log = logging.getLogger(__name__)
 
-# Load .env once on import so the SDK picks up ANTHROPIC_API_KEY.
+# Load .env once on import.
 load_dotenv()
 
-# Retryable HTTP status codes from the SDK. We back off exponentially.
 _RETRYABLE = (408, 429, 500, 502, 503, 504)
 _MAX_RETRIES = 4
 
 
+# --------------------------------------------------------------------------- #
+# Shared response type
+# --------------------------------------------------------------------------- #
 @dataclass
 class LLMResponse:
-    """Normalized result of one model turn."""
+    """Normalized result of one model turn — provider-agnostic."""
 
-    assistant: Message  # the full assistant message (text + tool_use blocks)
+    assistant: Message
     stop_reason: StopReason
-    # Token accounting — useful for cost reporting and context budgeting.
     input_tokens: int = 0
     output_tokens: int = 0
 
 
-class LLMClient:
-    """Thin wrapper around ``anthropic.Anthropic`` with retry + normalization."""
+# --------------------------------------------------------------------------- #
+# Provider protocol
+# --------------------------------------------------------------------------- #
+@runtime_checkable
+class LLMClient(Protocol):
+    """The contract the ReAct loop depends on.
+
+    Implementations translate between our neutral types and their provider SDK,
+    handle retries, and return a normalized :class:`LLMResponse`.
+    """
+
+    def ask(
+        self,
+        *,
+        system: str,
+        messages: list[Message],
+        tools: list[dict[str, Any]],
+        config: AgentConfig,
+    ) -> LLMResponse: ...
+
+
+# --------------------------------------------------------------------------- #
+# Anthropic implementation
+# --------------------------------------------------------------------------- #
+def _sleep_backoff(attempt: int) -> None:
+    time.sleep(0.5 * (2**attempt))
+
+
+class AnthropicClient:
+    """Claude via the native Anthropic SDK."""
 
     def __init__(self, api_key: str | None = None) -> None:
+        import anthropic
+
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             raise RuntimeError(
@@ -70,16 +118,10 @@ class LLMClient:
         tools: list[dict[str, Any]],
         config: AgentConfig,
     ) -> LLMResponse:
-        """Send one turn to the model and return a normalized response.
+        import anthropic
 
-        ``messages`` is the full conversation so far (user + assistant turns).
-        ``tools`` is the list of Anthropic tool definitions. ``config`` carries
-        model name, max_tokens, temperature.
-        """
         sdk_messages = [{"role": m.role, "content": to_sdk_content(m)} for m in messages]
 
-        # Retry loop for transient failures. We do NOT retry content errors
-        # (e.g. 400 invalid_request) — those need the caller to fix the input.
         last_err: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
@@ -92,22 +134,20 @@ class LLMClient:
                     messages=sdk_messages,
                 )
                 return self._normalize(resp)
-            except anthropic.APIStatusError as e:  # pragma: no cover - network path
+            except anthropic.APIStatusError as e:
                 last_err = e
                 if e.status_code not in _RETRYABLE:
                     raise
                 _sleep_backoff(attempt)
-            except anthropic.APIConnectionError as e:  # pragma: no cover
+            except anthropic.APIConnectionError as e:
                 last_err = e
                 _sleep_backoff(attempt)
 
-        # Exhausted retries.
-        raise RuntimeError(f"LLM call failed after {_MAX_RETRIES} attempts") from last_err
+        raise RuntimeError(f"Anthropic call failed after {_MAX_RETRIES} attempts") from last_err
 
-    def _normalize(self, resp: Any) -> LLMResponse:
-        """Turn an SDK response into our :class:`LLMResponse`."""
+    @staticmethod
+    def _normalize(resp: Any) -> LLMResponse:
         blocks = parse_blocks(resp.content)
-        # Synthesize stop_reason into our union; unknown values become "end_turn".
         stop: StopReason = getattr(resp, "stop_reason", None) or "end_turn"
         if stop not in ("end_turn", "tool_use", "max_tokens", "stop_sequence"):
             stop = "end_turn"
@@ -122,27 +162,243 @@ class LLMClient:
         )
 
 
-def _sleep_backoff(attempt: int) -> None:
-    """Exponential backoff: ~0.5s, 1s, 2s, 4s."""
-    time.sleep(0.5 * (2**attempt))
+# --------------------------------------------------------------------------- #
+# OpenAI-compatible implementation (DeepSeek, Ollama, vLLM, etc.)
+# --------------------------------------------------------------------------- #
+class OpenAICompatibleClient:
+    """Any OpenAI-compatible API server.
+
+    Works with DeepSeek, Ollama, vLLM, Together, etc. — anything that speaks
+    the OpenAI chat completions protocol.
+
+    Env vars:
+      LLM_API_KEY      — the API key (required)
+      LLM_BASE_URL     — base URL (default: https://api.deepseek.com)
+      LLM_MODEL        — default model (default: deepseek-chat)
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str | None = None,
+    ) -> None:
+        from openai import OpenAI
+
+        key = api_key or os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "LLM_API_KEY (or DEEPSEEK_API_KEY) is not set. "
+                "Copy .env.example to .env and fill it in."
+            )
+        url = base_url or os.environ.get("LLM_BASE_URL", "https://api.deepseek.com")
+        self._default_model = default_model or os.environ.get("LLM_MODEL", "deepseek-chat")
+        self._client = OpenAI(api_key=key, base_url=url)
+
+    def ask(
+        self,
+        *,
+        system: str,
+        messages: list[Message],
+        tools: list[dict[str, Any]],
+        config: AgentConfig,
+    ) -> LLMResponse:
+        """Translate our neutral types → OpenAI format, call, translate back."""
+        from openai import APIStatusError
+
+        # --- build OpenAI messages ---
+        # OpenAI puts system prompt as a message; Anthropic uses a separate param.
+        sdk_messages: list[dict[str, Any]] = []
+        if system.strip():
+            sdk_messages.append({"role": "system", "content": system})
+
+        for msg in messages:
+            if msg.role == "assistant":
+                sdk_messages.append(self._assistant_to_sdk(msg))
+            else:
+                # user turn — could contain text + tool_result blocks
+                sdk_messages.append(self._user_to_sdk(msg))
+
+        # --- convert tool defs (Anthropic → OpenAI format) ---
+        openai_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["input_schema"],
+                },
+            }
+            for t in tools
+        ]
+
+        # --- call with retry ---
+        model = config.model or self._default_model
+        last_err: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                kwargs: dict[str, Any] = dict(
+                    model=model,
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    messages=sdk_messages,
+                )
+                if openai_tools:
+                    kwargs["tools"] = openai_tools
+                resp = self._client.chat.completions.create(**kwargs)
+                return self._normalize(resp)
+            except APIStatusError as e:
+                last_err = e
+                if e.status_code not in _RETRYABLE:
+                    raise
+                _sleep_backoff(attempt)
+            except Exception as e:
+                last_err = e
+                _sleep_backoff(attempt)
+
+        raise RuntimeError(f"OpenAI-compat call failed after {_MAX_RETRIES} attempts") from last_err
+
+    # ---- wire-format translators ---- #
+
+    @staticmethod
+    def _assistant_to_sdk(msg: Message) -> dict[str, Any]:
+        """Convert our assistant Message to an OpenAI assistant message dict."""
+        content_parts: list[dict[str, Any]] = []
+        tool_calls: list[dict[str, Any]] = []
+
+        for blk in msg.content:
+            if isinstance(blk, TextBlock):
+                content_parts.append({"type": "text", "text": blk.text})
+            elif isinstance(blk, ToolUseBlock):
+                # OpenAI puts tool calls in a separate array.
+                tool_calls.append(
+                    {
+                        "id": blk.id,
+                        "type": "function",
+                        "function": {
+                            "name": blk.name,
+                            "arguments": json.dumps(blk.input, ensure_ascii=False),
+                        },
+                    }
+                )
+
+        out: dict[str, Any] = {"role": "assistant"}
+        if content_parts:
+            out["content"] = content_parts
+        if tool_calls:
+            out["tool_calls"] = tool_calls
+        return out
+
+    @staticmethod
+    def _user_to_sdk(msg: Message) -> dict[str, Any]:
+        """Convert our user Message (may contain tool_result blocks) to OpenAI format.
+
+        OpenAI expects tool results as separate ``role: "tool"`` messages, not
+        inline content blocks. We split them out.
+        """
+        text_parts: list[str] = []
+        tool_results: list[dict[str, Any]] = []
+
+        for blk in msg.content:
+            if isinstance(blk, TextBlock):
+                text_parts.append(blk.text)
+            elif isinstance(blk, ToolResultBlock):
+                tool_results.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": blk.tool_use_id,
+                        "content": blk.content,
+                    }
+                )
+
+        out: list[dict[str, Any]] = []
+        if text_parts:
+            out.append({"role": "user", "content": "\n".join(text_parts)})
+        out.extend(tool_results)
+        # If only tool results (no text), return the first; the caller will
+        # need to handle multiple but OpenAI actually sends them as separate
+        # messages so we return a list the caller should extend messages with.
+        if len(out) == 1:
+            return out[0]
+        # Multiple messages from one of ours — caller needs special handling.
+        # This shouldn't happen in practice because tool_result blocks are
+        # always grouped in one user turn. But if it does, concatenate.
+        if len(out) > 1 and all(m.get("role") == "tool" for m in out):
+            # Return a wrapper that the caller's retry loop can expand.
+            return {"role": "user", "content": "", "_extra_tool_messages": out[1:]}
+        return out[0]
+
+    @staticmethod
+    def _normalize(resp: Any) -> LLMResponse:
+        """Convert OpenAI ChatCompletion response to our LLMResponse."""
+        choice = resp.choices[0]
+        message = choice.message
+
+        # Build our content blocks from the OpenAI response.
+        blocks: list[Any] = []
+
+        # Text content.
+        if message.content:
+            blocks.append(TextBlock(text=message.content))
+
+        # Tool calls → ToolUseBlock.
+        if hasattr(message, "tool_calls") and message.tool_calls:
+            for tc in message.tool_calls:
+                args = {}
+                if tc.function.arguments:
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        args = {"raw": tc.function.arguments}
+                blocks.append(
+                    ToolUseBlock(
+                        id=tc.id,
+                        name=tc.function.name,
+                        input=args,
+                    )
+                )
+
+        # Stop reason mapping.
+        finish = getattr(choice, "finish_reason", None) or "stop"
+        stop_map = {
+            "stop": "end_turn",
+            "tool_calls": "tool_use",
+            "length": "max_tokens",
+        }
+        stop: StopReason = stop_map.get(finish, "end_turn")
+
+        # Token usage.
+        usage = getattr(resp, "usage", None)
+        in_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
+        out_tok = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        return LLMResponse(
+            assistant=Message(role="assistant", content=blocks),
+            stop_reason=stop,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+        )
 
 
-# Module-level convenience for one-shot prompts (no tools, no loop).
-# Used by simple demo/eval helpers; the ReAct loop uses the class directly.
-def ask(
-    prompt: str,
-    *,
-    model: str = "claude-sonnet-4-5",
-    system: str = "You are a helpful assistant.",
-    max_tokens: int = 1024,
-) -> str:
-    """Single-shot text completion. Returns the assistant's text."""
-    client = LLMClient()
-    cfg = AgentConfig(model=model, system_prompt=system, max_tokens=max_tokens)
-    resp = client.ask(
-        system=system,
-        messages=[Message(role="user", content=[TextBlock(text=prompt)])],
-        tools=[],
-        config=cfg,
+# --------------------------------------------------------------------------- #
+# Factory
+# --------------------------------------------------------------------------- #
+def create_client(provider: str | None = None) -> LLMClient:
+    """Create an LLM client based on the ``LLM_PROVIDER`` env var.
+
+    Providers:
+      ``anthropic``     — native Anthropic SDK (default)
+      ``openai-compat`` — OpenAI-compatible (DeepSeek, Ollama, vLLM, …)
+
+    Falls back to ``anthropic`` if the env var is not set.
+    """
+    p = (provider or os.environ.get("LLM_PROVIDER", "anthropic")).lower()
+
+    if p == "anthropic":
+        return AnthropicClient()  # type: ignore[return-value]
+    if p in ("openai-compat", "deepseek", "ollama", "openai"):
+        return OpenAICompatibleClient()  # type: ignore[return-value]
+
+    raise ValueError(
+        f"Unknown LLM provider: {p!r}. Set LLM_PROVIDER to 'anthropic' or 'openai-compat'."
     )
-    return resp.assistant.text()

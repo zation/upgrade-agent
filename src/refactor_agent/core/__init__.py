@@ -7,7 +7,13 @@ These are the primitives the ReAct pattern needs. Nothing here knows about
 from __future__ import annotations
 
 from .context import ContextBudget, compact_history, estimate_tokens, needs_compaction
-from .llm_client import LLMClient, LLMResponse, ask
+from .llm_client import (
+    AnthropicClient,
+    LLMClient,
+    LLMResponse,
+    OpenAICompatibleClient,
+    create_client,
+)
 from .react_loop import LoopCallbacks, LoopResult, ReActLoop
 from .trace import Tracer
 from .types import (
@@ -25,6 +31,7 @@ from .types import (
 
 __all__ = [
     "AgentConfig",
+    "AnthropicClient",
     "ContentBlock",
     "ContextBudget",
     "LLMClient",
@@ -32,6 +39,7 @@ __all__ = [
     "LoopCallbacks",
     "LoopResult",
     "Message",
+    "OpenAICompatibleClient",
     "ReActLoop",
     "TextBlock",
     "Tool",
@@ -41,8 +49,8 @@ __all__ = [
     "ToolResultBlock",
     "ToolUseBlock",
     "Tracer",
-    "ask",
     "compact_history",
+    "create_client",
     "estimate_tokens",
     "needs_compaction",
 ]
