@@ -216,8 +216,10 @@ class OpenAICompatibleClient:
             if msg.role == "assistant":
                 sdk_messages.append(self._assistant_to_sdk(msg))
             else:
-                # user turn — could contain text + tool_result blocks
-                sdk_messages.append(self._user_to_sdk(msg))
+                # user turn — may expand to MULTIPLE OpenAI messages, because
+                # OpenAI requires each tool_result as a separate role:"tool"
+                # message (Anthropic packs them into one user turn).
+                sdk_messages.extend(self._user_to_sdk(msg))
 
         # --- convert tool defs (Anthropic → OpenAI format) ---
         openai_tools = [
@@ -283,27 +285,32 @@ class OpenAICompatibleClient:
                 )
 
         out: dict[str, Any] = {"role": "assistant"}
-        if content_parts:
-            out["content"] = content_parts
+        # OpenAI requires `content` to be present even when null (tool_calls only).
+        out["content"] = content_parts if content_parts else None
         if tool_calls:
             out["tool_calls"] = tool_calls
         return out
 
     @staticmethod
-    def _user_to_sdk(msg: Message) -> dict[str, Any]:
-        """Convert our user Message (may contain tool_result blocks) to OpenAI format.
+    def _user_to_sdk(msg: Message) -> list[dict[str, Any]]:
+        """Convert our user Message to one or more OpenAI messages.
 
-        OpenAI expects tool results as separate ``role: "tool"`` messages, not
-        inline content blocks. We split them out.
+        Anthropic packs multiple tool results into a single user turn as
+        content blocks. OpenAI instead requires each tool result as a
+        SEPARATE ``role: "tool"`` message, each keyed by ``tool_call_id``.
+        So one of our Messages may expand to several OpenAI messages:
+        optionally a user text message, then one tool message per result.
+
+        Returns a list (always) so the caller can ``extend`` unconditionally.
         """
+        out: list[dict[str, Any]] = []
         text_parts: list[str] = []
-        tool_results: list[dict[str, Any]] = []
 
         for blk in msg.content:
             if isinstance(blk, TextBlock):
                 text_parts.append(blk.text)
             elif isinstance(blk, ToolResultBlock):
-                tool_results.append(
+                out.append(
                     {
                         "role": "tool",
                         "tool_call_id": blk.tool_use_id,
@@ -311,22 +318,11 @@ class OpenAICompatibleClient:
                     }
                 )
 
-        out: list[dict[str, Any]] = []
+        # A user turn with only tool results has no text; a turn with text
+        # (e.g. the initial task) has only text. Either way, emit text first.
         if text_parts:
-            out.append({"role": "user", "content": "\n".join(text_parts)})
-        out.extend(tool_results)
-        # If only tool results (no text), return the first; the caller will
-        # need to handle multiple but OpenAI actually sends them as separate
-        # messages so we return a list the caller should extend messages with.
-        if len(out) == 1:
-            return out[0]
-        # Multiple messages from one of ours — caller needs special handling.
-        # This shouldn't happen in practice because tool_result blocks are
-        # always grouped in one user turn. But if it does, concatenate.
-        if len(out) > 1 and all(m.get("role") == "tool" for m in out):
-            # Return a wrapper that the caller's retry loop can expand.
-            return {"role": "user", "content": "", "_extra_tool_messages": out[1:]}
-        return out[0]
+            out.insert(0, {"role": "user", "content": "\n".join(text_parts)})
+        return out
 
     @staticmethod
     def _normalize(resp: Any) -> LLMResponse:
