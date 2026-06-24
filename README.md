@@ -1,61 +1,94 @@
 # refactor-agent
 
-A ReAct + LangGraph AI agent that **upgrades dependencies** and **adds tests** for legacy JS/TS projects.
+A ReAct + LangGraph AI agent that **upgrades dependencies** and **adds tests**
+for legacy JS/TS projects.
 
-First target: [`zation/chai-like`](https://github.com/zation/chai-like) — an old chai plugin (ES5, chai 3.x, Travis CI).
+First target: [`zation/chai-like`](https://github.com/zation/chai-like) — an old
+chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 
-> This project is also a learning vehicle: it deliberately covers the broadest set of generic AI-Agent techniques so the author can study them and use this on a resume.
+> This project is also a learning vehicle: it deliberately covers the broadest
+> set of generic AI-Agent techniques so the author can study them and use this
+> on a resume. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
+> technique→file map and design rationale.
+
+## Status
+
+- **M1 ✅** — hand-written ReAct loop + fs/shell/git/npm tools. Verified
+  end-to-end: the agent analyzed `chai-like` over 10 iterations and produced a
+  real dependency-upgrade-risk report.
+- **M2 🚧** — `upgrade` command added; first real upgrade (mocha 4→11) is next.
 
 ## Techniques covered
 
-| Technique | Where it lives |
-|-----------|----------------|
-| ReAct (Think–Act–Observe) | hand-written tool loop in `core/react_loop.py` |
-| Function Calling / Tool Use | native Claude `tool_use` protocol |
-| Structured output | Pydantic schemas for upgrade plans / reports |
-| Multi-step planning (Plan-and-Execute) | `orchestrator/nodes/plan.py` |
-| State-graph orchestration | LangGraph `StateGraph` |
-| Self-healing / reflection | `verify → self-heal` edge |
-| RAG | changelog / release-notes retrieval |
-| Sub-agent | "breaking-change researcher" |
-| Context engineering | `core/context.py` |
-| Evals | `evals/` |
-| Observability | JSONL traces + rich CLI output |
+| Technique | Where it lives | Status |
+|-----------|----------------|--------|
+| ReAct (Think–Act–Observe) | hand-written loop `core/react_loop.py` | ✅ |
+| Function Calling / Tool Use | native tool-use protocol | ✅ |
+| Multi-provider abstraction | `core/llm_client.py` (Claude + OpenAI-compat) | ✅ |
+| Structured output | pydantic schemas (planned) | 🚧 |
+| Multi-step planning (Plan-and-Execute) | `orchestrator/nodes/plan.py` | ⏳ M3 |
+| State-graph orchestration | LangGraph `StateGraph` | ⏳ M3 |
+| Self-healing / reflection | `verify → self-heal` edge | ⏳ M3 |
+| RAG | changelog / release-notes retrieval | ⏳ M4 |
+| Sub-agent | "breaking-change researcher" | ⏳ M4 |
+| Context engineering | `core/context.py` (budget + compaction) | ✅ |
+| Evals | `evals/` | ⏳ M5 |
+| Observability | JSONL traces (`core/trace.py`) + rich CLI | ✅ |
 
 ## Quickstart
 
 ```bash
-# 1. Install (uses uv — fast)
+# 1. Install deps (uses uv — fast)
 uv sync --extra dev
 
-# 2. Add your key
+# 2. Configure your LLM provider
 cp .env.example .env
-# edit .env -> set ANTHROPIC_API_KEY
+#   For DeepSeek (or any OpenAI-compatible API):
+#     LLM_PROVIDER=openai-compat
+#     LLM_API_KEY=sk-...
+#   For Anthropic Claude:
+#     LLM_PROVIDER=anthropic
+#     ANTHROPIC_API_KEY=sk-ant-...
 
 # 3. Clone the target project somewhere on disk
 git clone https://github.com/zation/chai-like ../chai-like
+cd ../chai-like && npm install   # establish a working baseline
 
 # 4. Run the agent against it
 uv run refactor-agent analyze ../chai-like
+uv run refactor-agent upgrade ../chai-like "mocha 4 -> 11"
+uv run refactor-agent ask       ../chai-like "any free-form task"
 ```
+
+## Commands
+
+| Command | Tools | Purpose |
+|---------|-------|---------|
+| `analyze <project>` | read-only | Profile a project; report upgrade risks. |
+| `upgrade <project> "<dep>"` | full | Upgrade ONE dep: baseline → change → verify. |
+| `ask <project> "<task>"` | full | Run the agent on an arbitrary task. |
+
+Add `--verbose` for full model output, `--model` to override the provider default.
 
 ## Project layout
 
 ```
 src/refactor_agent/
-  core/          hand-written agent base (LLM-agnostic, task-agnostic)
-  orchestrator/  LangGraph state graph + nodes
-  tools/         fs / shell / git / npm / changelog / rag
-  skills/        domain skill packs (upgrade-dependencies, add-tests)
-  cli/           typer entrypoint + rich UI
-evals/           fixed tasks + runner + golden answers
+  core/          hand-written agent base — model-agnostic, task-agnostic
+  tools/         fs / shell / git / npm (the agent's tool belt)
+  skills/        domain prompts: analyze / upgrade (+ later sub-graphs)
+  cli/           typer entrypoint + rich live UI
+docs/            ARCHITECTURE.md (deep-dive)
+evals/           (M5) fixed tasks + runner + golden answers
 ```
+
+Day-to-day rules for contributors/agents: see [AGENTS.md](AGENTS.md).
 
 ## Roadmap
 
-- **M1** ReAct core + fs/shell tools ← _current_
-- **M2** upgrade a single dependency (chai 3 → 5) end-to-end
-- **M3** LangGraph orchestration + self-heal
-- **M4** RAG + research sub-agent
-- **M5** eval runner + CLI polish
-- **M6** add-tests skill
+- **M1 ✅** ReAct core + fs/shell/git/npm tools; verified end-to-end.
+- **M2 🚧** real single-dependency upgrade (mocha 4→11) with baseline/verify.
+- **M3** LangGraph `StateGraph` + `verify → self-heal` edge.
+- **M4** RAG changelog retrieval + "breaking-change researcher" sub-agent.
+- **M5** eval harness + CLI polish.
+- **M6** add-tests skill.
