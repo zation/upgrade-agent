@@ -34,9 +34,14 @@ __all__ = [
 def read_only_tools() -> list[Tool]:
     """Read/inspect tools only — safe for a dry-run or analysis pass."""
     return [
-        ReadFile(), Glob(), Grep(),
-        GitStatus(), GitDiff(),
-        NpmOutdated(), NpmView(), NpmReleases(),
+        ReadFile(),
+        Glob(),
+        Grep(),
+        GitStatus(),
+        GitDiff(),
+        NpmOutdated(),
+        NpmView(),
+        NpmReleases(),
     ]
 
 

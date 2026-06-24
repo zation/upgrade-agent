@@ -76,9 +76,7 @@ class LLMClient:
         ``tools`` is the list of Anthropic tool definitions. ``config`` carries
         model name, max_tokens, temperature.
         """
-        sdk_messages = [
-            {"role": m.role, "content": to_sdk_content(m)} for m in messages
-        ]
+        sdk_messages = [{"role": m.role, "content": to_sdk_content(m)} for m in messages]
 
         # Retry loop for transient failures. We do NOT retry content errors
         # (e.g. 400 invalid_request) — those need the caller to fix the input.

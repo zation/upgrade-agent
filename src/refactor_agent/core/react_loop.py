@@ -128,9 +128,7 @@ class ReActLoop:
         tool_map = self._tool_map()
 
         # Seed the transcript with the task as the first user message.
-        messages: list[Message] = [
-            Message(role="user", content=[TextBlock(text=task)])
-        ]
+        messages: list[Message] = [Message(role="user", content=[TextBlock(text=task)])]
         tracer.event("task", text=task, tools=[t.name for t in self.tools])
 
         total_in = total_out = 0

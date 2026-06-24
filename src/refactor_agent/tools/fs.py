@@ -146,9 +146,7 @@ class EditFile(ToolImpl):
         text = full.read_text(encoding="utf-8", errors="replace")
         count = text.count(old_text)
         if count == 0:
-            return ToolResult(
-                output=f"old_text not found in {path}. No edit made.", is_error=True
-            )
+            return ToolResult(output=f"old_text not found in {path}. No edit made.", is_error=True)
         if count > 1:
             return ToolResult(
                 output=(

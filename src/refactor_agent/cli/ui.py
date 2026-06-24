@@ -52,8 +52,7 @@ class RichUI:
 
     def on_tool_call(self, name: str, args: dict[str, Any]) -> None:
         self.console.print(
-            f"  [bold yellow]→[/bold yellow] [bold]{name}[/bold]"
-            f" [dim]{_compact_args(args)}[/dim]"
+            f"  [bold yellow]→[/bold yellow] [bold]{name}[/bold] [dim]{_compact_args(args)}[/dim]"
         )
 
     def on_tool_result(self, name: str, result: ToolResult) -> None:

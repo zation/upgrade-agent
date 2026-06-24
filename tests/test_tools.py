@@ -12,6 +12,7 @@ from refactor_agent.tools._common import PathEscapeError, safe_resolve
 
 @pytest.fixture()
 def ctx(tmp_path):
+    (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.js").write_text("require('chai');\n", encoding="utf-8")
     (tmp_path / "README.md").write_text("# hello\n", encoding="utf-8")
     return ToolContext(workdir=str(tmp_path), run_id="test")
@@ -83,9 +84,7 @@ def test_edit_file_ambiguous_rejected(ctx):
     from refactor_agent.tools.fs import EditFile, WriteFile
 
     WriteFile().run({"path": "src/dup.js", "content": "AAA AAA"}, ctx)
-    res = EditFile().run(
-        {"path": "src/dup.js", "old_text": "AAA", "new_text": "BBB"}, ctx
-    )
+    res = EditFile().run({"path": "src/dup.js", "old_text": "AAA", "new_text": "BBB"}, ctx)
     assert res.is_error  # two occurrences -> must refuse
 
 

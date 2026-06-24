@@ -92,9 +92,7 @@ class NpmView(ToolImpl):
             "repository": _repo_url(data.get("repository")),
             "recent_versions": versions[-12:],
         }
-        return ToolResult(
-            output=json.dumps(summary, indent=2), metadata={"latest": latest}
-        )
+        return ToolResult(output=json.dumps(summary, indent=2), metadata={"latest": latest})
 
 
 class NpmReleases(ToolImpl):

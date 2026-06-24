@@ -211,9 +211,7 @@ def parse_blocks(raw: Sequence[dict[str, Any]]) -> list[ContentBlock]:
             content = blk.get("content", "")
             # Anthropic allows content to be a list of sub-blocks; flatten to text.
             if isinstance(content, list):
-                content = "".join(
-                    sub.get("text", "") for sub in content if isinstance(sub, dict)
-                )
+                content = "".join(sub.get("text", "") for sub in content if isinstance(sub, dict))
             out.append(
                 ToolResultBlock(
                     tool_use_id=blk["tool_use_id"],
@@ -231,7 +229,7 @@ def to_sdk_content(message: Message) -> list[dict[str, Any]]:
     """Inverse of :func:`parse_blocks` — our blocks back to SDK dicts.
 
     Only used for the content we send to the model (user tool-result turns and
-    replayed assistant turns). """
+    replayed assistant turns)."""
     result: list[dict[str, Any]] = []
     for blk in message.content:
         if isinstance(blk, TextBlock):
