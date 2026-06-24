@@ -1,14 +1,16 @@
 """CLI entrypoint.
 
     uv run refactor-agent analyze ../some-project
-    uv run refactor-agent ask "any free-form task"
+    uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
+    uv run refactor-agent ask ../some-project "any free-form task"
 
-Two commands for now:
-- ``analyze``  — read-only ReAct run that profiles a project (M1 demo).
-- ``ask``      — give the agent any task against a project, with full tools.
+Commands:
+- ``analyze`` — read-only ReAct run that profiles a project.
+- ``upgrade`` — full-tool upgrade of ONE dependency (baseline → change → verify).
+- ``ask``     — give the agent any task against a project, with full tools.
 
-Both wire the same primitives: LLMClient → ReActLoop → tools, observed by the
-RichUI. This is the user-facing surface; everything substantive is in core/.
+All wire the same primitives: create_client() → ReActLoop → tools, observed by
+the RichUI. This is the user-facing surface; everything substantive is in core/.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import typer
 from rich.console import Console
 
 from ..core import AgentConfig, ReActLoop, create_client
-from ..skills import ANALYZE
+from ..skills import ANALYZE, BASE_AGENT, UPGRADE
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
 
@@ -90,6 +92,38 @@ def analyze(
 
 
 @app.command()
+def upgrade(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    target: str = typer.Argument(..., help='Upgrade target, e.g. "mocha 4 -> 11".'),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(40, "--max-iters"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Upgrade ONE dependency: baseline → change → verify (with self-heal)."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]upgrading[/bold] {target} in {workdir}")
+
+    client = create_client()
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(model=model, system_prompt=UPGRADE, max_iterations=max_iterations),
+        tools=default_tools(),
+        workdir=workdir,
+        callbacks=RichUI(verbose=verbose),
+    )
+    task = (
+        f"Upgrade the dependency: {target}.\n\n"
+        "Follow the upgrade workflow strictly: first establish a green test "
+        "baseline (run the tests, record the passing count), then research "
+        "breaking changes, then make the minimal version change, adapt the code "
+        "if needed, and verify tests still pass with the same count. Report "
+        "what broke and what you fixed."
+    )
+    result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command()
 def ask(
     project: Path = typer.Argument(..., help="Path to the target project."),
     task: str = typer.Argument(..., help="The task for the agent."),
@@ -106,7 +140,7 @@ def ask(
     tools = read_only_tools() if read_only else default_tools()
     loop = ReActLoop(
         client=client,
-        config=AgentConfig(model=model, system_prompt=ANALYZE, max_iterations=max_iterations),
+        config=AgentConfig(model=model, system_prompt=BASE_AGENT, max_iterations=max_iterations),
         tools=tools,
         workdir=workdir,
         callbacks=RichUI(verbose=verbose),

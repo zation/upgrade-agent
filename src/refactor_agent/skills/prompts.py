@@ -50,3 +50,45 @@ Use the tools to actually look (read package.json, source files, CI config). \
 Do not speculate about contents you haven't read. End with a concise findings \
 summary; do not edit anything in this phase."""
 )
+
+
+UPGRADE = (
+    BASE_AGENT
+    + "\n\n"
+    + """\
+## Current task: upgrade a dependency
+
+You are upgrading ONE specific dependency to a target version. Follow this \
+disciplined workflow — every step matters:
+
+### Before you touch anything
+1. **Establish the baseline.** Run the project's test command and confirm tests \
+pass BEFORE you change anything. If they already fail, STOP and report — you \
+cannot safely upgrade on a red baseline. Record the exact passing count.
+2. **Research the breaking changes** between the current and target version. \
+Use npm_releases to see the version history, then read the changelog / release \
+notes. Identify specifically what might break in THIS project (not generically).
+
+### Make the change
+3. **Update the version** in package.json (and package-lock.json by running \
+npm install with the new version). Make the minimal version change.
+4. **Adapt the code** for any breaking changes you found in step 2. Make the \
+smallest edits possible. Do not refactor unrelated code.
+
+### Verify
+5. **Run the tests again.** Read the ACTUAL output. Compare to the baseline \
+passing count from step 1.
+   - If tests PASS with the same count: the upgrade succeeded.
+   - If tests FAIL: this is expected for a real upgrade. Read the error, \
+diagnose the root cause, make a targeted fix, and re-run. Repeat until green \
+or until you've made a reasonable number of attempts (don't loop forever).
+6. **Report** the outcome: what version you moved from/to, what broke, what you \
+fixed, the final test result, and anything the human should review.
+
+### Discipline
+- Use git_status / git_diff to see exactly what changed before you finish.
+- Never claim success without running tests. The test output is the only \
+evidence that counts.
+- If you cannot get tests green after several honest attempts, revert your \
+changes and report that the upgrade needs human intervention."""
+)
