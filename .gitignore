@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual env / uv
+.venv/
+venv/
+
+# Env
+.env
+
+# Traces (runtime artifacts, not source)
+traces/
+!traces/.gitkeep
+
+# OS
+.DS_Store

@@ -1,0 +1,69 @@
+[project]
+name = "refactor-agent"
+version = "0.1.0"
+description = "A ReAct + LangGraph AI agent that upgrades dependencies and adds tests for legacy JS/TS projects."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "liuyang" }]
+license = { text = "MIT" }
+
+dependencies = [
+    # LLM
+    "anthropic>=0.40.0",
+    # Orchestration (M3+)
+    "langgraph>=0.2.60",
+    # Schema / structured output
+    "pydantic>=2.9.0",
+    # CLI
+    "typer>=0.15.0",
+    "rich>=13.9.0",
+    # Git
+    "gitpython>=3.1.43",
+    # HTTP (npm registry, changelogs, RAG sources)
+    "httpx>=0.27.0",
+    # .env loading
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[project.scripts]
+refactor-agent = "refactor_agent.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/refactor_agent"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "evals"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["refactor_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["langgraph.*", "git.*"]
+ignore_missing_imports = true
