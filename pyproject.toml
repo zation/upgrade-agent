@@ -54,6 +54,14 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.ruff.lint.isort]
 known-first-party = ["refactor_agent"]
 
+[tool.ruff.lint.per-file-ignores]
+# Tool classes declare name/description/input_schema as plain class attributes
+# (a common tool-registration pattern). RUF012 objects to the mutable dict
+# default; that's a false positive for static tool metadata, so we opt out.
+"src/refactor_agent/tools/*.py" = ["RUF012"]
+# typer.Option/Argument as defaults is the framework's idiomatic API.
+"src/refactor_agent/cli/*.py" = ["B008"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
