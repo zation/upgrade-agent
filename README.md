@@ -92,7 +92,7 @@ Day-to-day rules for contributors/agents: see [AGENTS.md](AGENTS.md).
 - **M1 ✅** ReAct core + fs/shell/git/npm tools; verified end-to-end.
 - **M2 ✅** real single-dependency upgrade (mocha 4→11) with baseline/verify.
 - **M3 🚧** real all-dependencies upgrade with baseline/verify.
-- **M3** LangGraph `StateGraph` + `verify → self-heal` edge.
-- **M4** RAG changelog retrieval + "breaking-change researcher" sub-agent.
-- **M5** eval harness + CLI polish.
-- **M6** add-tests skill.
+- **M4** LangGraph `StateGraph` + `verify → self-heal` edge.
+- **M5** RAG changelog retrieval + "breaking-change researcher" sub-agent.
+- **M6** eval harness + CLI polish.
+- **M7** add-tests skill.
