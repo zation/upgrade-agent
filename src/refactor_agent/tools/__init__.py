@@ -9,6 +9,7 @@ shell are opt-in so a caller can start in a read-only "dry-run" mode.
 from __future__ import annotations
 
 from ..core.types import Tool
+from .changelog import FetchReleases, FetchUrl
 from .fs import EditFile, Glob, Grep, ReadFile, WriteFile
 from .git import GitDiff, GitStatus
 from .npm import NpmOutdated, NpmReleases, NpmView
@@ -16,6 +17,8 @@ from .shell import RunCommand
 
 __all__ = [
     "EditFile",
+    "FetchReleases",
+    "FetchUrl",
     "GitDiff",
     "GitStatus",
     "Glob",
@@ -42,14 +45,16 @@ def read_only_tools() -> list[Tool]:
         NpmOutdated(),
         NpmView(),
         NpmReleases(),
+        FetchReleases(),
+        FetchUrl(),
     ]
 
 
 def default_tools() -> list[Tool]:
-    """The full M1 toolset: inspection + mutation + shell.
+    """The full toolset: inspection + mutation + shell + web research.
 
     This is what an upgrade task needs: it can read code, find usages, edit
-    files, run npm/test, and check git state.
+    files, run npm/test, read changelogs, and check git state.
     """
     return [
         ReadFile(),
@@ -63,4 +68,6 @@ def default_tools() -> list[Tool]:
         NpmOutdated(),
         NpmView(),
         NpmReleases(),
+        FetchReleases(),
+        FetchUrl(),
     ]
