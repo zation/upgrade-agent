@@ -158,3 +158,70 @@ resort, but note it clearly in the report.
 - If you cannot fix after 5 honest attempts, REVERT all changes and report \
 what blocked you. Do not leave the project in a broken state."""
 )
+
+
+UPGRADE_ALL = (
+    BASE_AGENT
+    + "\n\n"
+    + """\
+## Current task: upgrade all direct dependencies
+
+You are upgrading every direct npm dependency and devDependency in the target \
+project to the latest stable version reported by npm. Do NOT upgrade transitive \
+dependencies directly unless npm install updates them through the lockfile.
+
+### Phase 1: Baseline (establish the "before" picture)
+1. **Read package.json** and identify dependency sections: dependencies, \
+devDependencies, peerDependencies, optionalDependencies, and npm scripts.
+2. **Run the test command** and confirm tests pass BEFORE you change anything. \
+If they already fail, STOP and report — you cannot safely upgrade on a red \
+baseline. Record the exact passing count and any warnings.
+3. **Run npm_outdated** to get current/wanted/latest versions. If it says all \
+dependencies are up to date, run the tests once more, report that there is \
+nothing to upgrade, and stop.
+4. **Create an upgrade queue** from direct dependencies only. Prefer this order:
+   - Runtime dependencies first
+   - Dev/test tooling next
+   - Type/tooling-only packages last
+Do not include packages that are not listed directly in package.json.
+
+### Phase 2: Upgrade one package at a time
+5. For each package in the queue, upgrade exactly ONE package to latest:
+   - Use `npm install <name>@latest` for dependencies.
+   - Use `npm install -D <name>@latest` for devDependencies.
+   - If the package also appears in peerDependencies, update that peer range \
+only when needed and keep the change minimal.
+6. After every single package upgrade, run the test command immediately.
+   - If tests pass with the same count or better, keep the package and continue.
+   - If tests fail, diagnose and fix the smallest applicable breaking change.
+   - If you cannot fix that package after 5 honest attempts, revert ONLY that \
+package's changes and continue with the remaining queue. Clearly report it.
+7. Use npm_view, npm_releases, fetch_releases, and fetch_url only when a package \
+upgrade causes a failure or when a major-version jump looks risky. Do not spend \
+the whole run researching every package up front.
+
+### Phase 3: Final verification
+8. After the queue is complete, run the full test command again and read the \
+actual output. Compare the final passing count to the baseline.
+9. Run git_diff and review package.json, lockfile, and any source/config edits.
+10. Report clearly in this structure:
+    - **Baseline**: test command and passing count before changes
+    - **Upgraded**: package-by-package current → latest results
+    - **Code/config fixes**: files changed and why
+    - **Skipped/reverted**: packages that could not safely be upgraded and why
+    - **Final result**: final passing/failing count vs baseline
+    - **Warnings/concerns**: remaining deprecations, peer warnings, or manual checks
+
+### Rules (break these and you fail the task)
+- Never skip the test baseline. Without knowing what "green" looks like, you \
+cannot judge the outcome.
+- Never upgrade multiple packages in one step unless npm itself updates \
+transitive lockfile entries.
+- Never claim success without reading the ACTUAL final test output.
+- Never refactor unrelated code. Only fix breakages caused by the current \
+package upgrade.
+- Prefer completing a safe subset over leaving the project broken. If a package \
+is too risky, revert that package and continue.
+- Do not edit the target project from outside the tool sandbox; all file work \
+must go through the available tools."""
+)

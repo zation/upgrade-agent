@@ -17,9 +17,11 @@ broadest set of generic AI-Agent techniques (for study + resume).
 
 - **M1 ✅** — hand-written ReAct loop + tools, verified end-to-end (agent
   analyzed `chai-like` over 10 iterations and produced a real report).
-- **M2 🚧** — `upgrade` CLI command added; first real upgrade (mocha 4→11)
-  is the next task to run. Baseline confirmed: `chai-like` = 28 passing, 100% cov.
-- M3–M6 not started (see Roadmap in README.md).
+- **M2 ✅** — `upgrade` CLI command completed for real single-dependency
+  upgrades. Baseline confirmed: `chai-like` = 28 passing, 100% cov.
+- **M3 🚧** — `upgrade-all` CLI command is the next workflow: upgrade direct
+  dependencies one at a time with baseline/per-package/final verification.
+- M4–M6 not started (see Roadmap in README.md).
 
 ## Ground rules — READ BEFORE ACTING
 
@@ -47,6 +49,7 @@ uv run pytest -v
 # run the agent against a target project (needs .env with LLM_API_KEY)
 uv run refactor-agent analyze   /Users/liuyang/Projects/chai-like
 uv run refactor-agent upgrade   /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
+uv run refactor-agent upgrade-all /Users/liuyang/Projects/chai-like
 uv run refactor-agent ask       /Users/liuyang/Projects/chai-like "your task"
 ```
 

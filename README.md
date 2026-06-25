@@ -16,7 +16,8 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 - **M1 ✅** — hand-written ReAct loop + fs/shell/git/npm tools. Verified
   end-to-end: the agent analyzed `chai-like` over 10 iterations and produced a
   real dependency-upgrade-risk report.
-- **M2 🚧** — `upgrade` command added; first real upgrade (mocha 4→11) is next.
+- **M2 ✅** — `upgrade` command completed and verified for real single-dependency upgrades.
+- **M3 🚧** — `upgrade-all` command added for direct dependency upgrades, one package at a time.
 
 ## Techniques covered
 
@@ -57,6 +58,7 @@ cd ../chai-like && npm install   # establish a working baseline
 # 4. Run the agent against it
 uv run refactor-agent analyze ../chai-like
 uv run refactor-agent upgrade ../chai-like "mocha 4 -> 11"
+uv run refactor-agent upgrade-all ../chai-like
 uv run refactor-agent ask       ../chai-like "any free-form task"
 ```
 
@@ -66,6 +68,7 @@ uv run refactor-agent ask       ../chai-like "any free-form task"
 |---------|-------|---------|
 | `analyze <project>` | read-only | Profile a project; report upgrade risks. |
 | `upgrade <project> "<dep>"` | full | Upgrade ONE dep: baseline → change → verify. |
+| `upgrade-all <project>` | full | Upgrade all direct deps one at a time: baseline → queue → per-dep verify → final verify. |
 | `ask <project> "<task>"` | full | Run the agent on an arbitrary task. |
 
 Add `--verbose` for full model output, `--model` to override the provider default.

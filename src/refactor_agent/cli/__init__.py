@@ -2,11 +2,13 @@
 
     uv run refactor-agent analyze ../some-project
     uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
+    uv run refactor-agent upgrade-all ../some-project
     uv run refactor-agent ask ../some-project "any free-form task"
 
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
 - ``upgrade`` — full-tool upgrade of ONE dependency (baseline → change → verify).
+- ``upgrade-all`` — full-tool upgrade of all direct dependencies, one at a time.
 - ``ask``     — give the agent any task against a project, with full tools.
 
 All wire the same primitives: create_client() → ReActLoop → tools, observed by
@@ -22,7 +24,7 @@ import typer
 from rich.console import Console
 
 from ..core import AgentConfig, ReActLoop, create_client
-from ..skills import ANALYZE, BASE_AGENT, UPGRADE
+from ..skills import ANALYZE, BASE_AGENT, UPGRADE, UPGRADE_ALL
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
 
@@ -118,6 +120,39 @@ def upgrade(
         "breaking changes, then make the minimal version change, adapt the code "
         "if needed, and verify tests still pass with the same count. Report "
         "what broke and what you fixed."
+    )
+    result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command("upgrade-all")
+def upgrade_all(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(80, "--max-iters"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Upgrade all direct dependencies to latest, one package at a time."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
+
+    client = create_client()
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(model=model, system_prompt=UPGRADE_ALL, max_iterations=max_iterations),
+        tools=default_tools(),
+        workdir=workdir,
+        callbacks=RichUI(verbose=verbose),
+    )
+    task = (
+        "Upgrade all direct npm dependencies and devDependencies in this project "
+        "to their latest stable versions.\n\n"
+        "Follow the all-dependencies upgrade workflow strictly: first establish "
+        "a green test baseline and record the passing count, then use npm_outdated "
+        "to build the package queue, upgrade exactly one direct package at a time, "
+        "verify tests after each package, fix only breakages caused by that package, "
+        "and finish with a final test run plus git diff review. If one package "
+        "cannot be fixed safely, revert that package and continue with the rest."
     )
     result = loop.run(task)
     raise typer.Exit(code=0 if result.ok else 1)
