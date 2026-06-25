@@ -23,7 +23,9 @@ broadest set of generic AI-Agent techniques (for study + resume).
   dependencies one at a time with baseline/per-package/final verification.
 - **M4 🚧** — LangGraph `upgrade-graph` orchestration is being added as a thin
   workflow layer around the hand-written ReAct loop.
-- M5–M6 not started (see Roadmap in README.md).
+- **M5 🚧** — changelog/RAG groundwork started with `dependency_research`, a
+  read-only npm research tool that returns version spans and candidate sources.
+- M6 not started (see Roadmap in README.md).
 
 ## Ground rules — READ BEFORE ACTING
 

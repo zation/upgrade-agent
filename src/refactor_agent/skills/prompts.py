@@ -71,8 +71,10 @@ baseline. Record the exact passing count and any npm warnings.
 peerDependency. This matters for how you update it.
 
 ### Phase 2: Research breaking changes (spend at most 4 iterations here)
-4. **Use npm_releases** to see the version history and major version jumps.
-5. **Read the changelog** — use fetch_releases (for GitHub-hosted packages) \
+4. **Use dependency_research first** to get the latest version, major-version \
+span, repository/homepage, candidate changelog URLs, and initial risk hints.
+5. **Use npm_releases** to see the version history and major version jumps.
+6. **Read the changelog** — use fetch_releases (for GitHub-hosted packages) \
 or fetch_url (for migration guides, changelog pages) to read actual release \
 notes. If npm_view returns a repository URL, use it to identify the GitHub \
 owner/repo for fetch_releases. Focus on:
@@ -81,32 +83,32 @@ owner/repo for fetch_releases. Focus on:
    - New required config or CLI flag changes
    - ESM/CJS module system changes (e.g. "this package is now ESM-only")
    - Minimum Node.js version bumps
-6. **Identify what applies to THIS project** — don't list generic changes. \
+7. **Identify what applies to THIS project** — don't list generic changes. \
 Read the project's source code and test files to see which APIs/patterns are \
 actually used. Cross-reference with the changelog. **If the changelog is \
 incomplete or hard to find, proceed anyway — the tests will catch real \
 breakage.**
 
 ### Phase 3: Make the version change
-7. **Update package.json** — change the version range. If the dependency is \
+8. **Update package.json** — change the version range. If the dependency is \
 also a peerDependency, update that range too (or remove the upper bound if \
 appropriate — e.g. change "2 - 5" to "2 - 6" or ">=2").
-8. **Run npm install** with the new version. READ the install output carefully:
+9. **Run npm install** with the new version. READ the install output carefully:
    - Peer dependency warnings: these reveal compatibility gaps
    - Deprecation warnings: these hint at what will break soon
    - ERESOLVE errors: version conflicts; try adjusting constraints or use \
 --legacy-peer-deps as a last resort
    - If npm install fails, read the error, adjust the version constraint, and retry.
-9. **Run git_diff** to confirm exactly what changed in package.json and lock file.
+10. **Run git_diff** to confirm exactly what changed in package.json and lock file.
 
 ### Phase 4: Adapt code for breaking changes (THE CRITICAL PHASE)
-10. **Run the tests** immediately after npm install. READ the full test output.
+11. **Run the tests** immediately after npm install. READ the full test output.
     - If all tests PASS with the same count as baseline: **ACCEPT THIS RESULT.**
     Do NOT investigate why it works or second-guess the test output. The tests
     are the ultimate authority. Immediately skip to Phase 5.
-    - If tests FAIL: proceed to step 11.
+    - If tests FAIL: proceed to step 12.
 
-11. **Diagnose the failure systematically**. First, identify the error TYPE:
+12. **Diagnose the failure systematically**. First, identify the error TYPE:
     - **Module not found / import error** (e.g. "Cannot find module 'X'"): \
 The package changed its entry point or became ESM-only. Check \
 node_modules/<pkg>/package.json for "exports" field or "type":"module". \
@@ -125,21 +127,21 @@ package.json.
 function signature changed. Read the new signature from node_modules or docs, \
 then update the call site.
 
-12. **Fix ONE error at a time.** Make a single targeted code change using \
+13. **Fix ONE error at a time.** Make a single targeted code change using \
 edit_file (preferred) or write_file. Then immediately re-run the tests. \
-If that error is gone but a new one appears, repeat step 11. If the SAME \
+If that error is gone but a new one appears, repeat step 12. If the SAME \
 error persists, your fix was wrong — try a different approach.
 
-13. **Repeat steps 10-12** until all tests pass. If you reach 5 fix attempts \
+14. **Repeat steps 11-13** until all tests pass. If you reach 5 fix attempts \
 without getting to green, STOP and revert all changes (use git checkout on \
 each modified file or git reset --hard if there are no other changes to keep).
 
 ### Phase 5: Verify and report
-14. **Final test run** — confirm the passing count matches or exceeds the \
+15. **Final test run** — confirm the passing count matches or exceeds the \
 baseline from Phase 1. Read and report the actual test names and counts.
-15. **Run git_diff** to review every change you made. This is your last \
+16. **Run git_diff** to review every change you made. This is your last \
 chance to catch mistakes.
-16. **Report** clearly in this structure:
+17. **Report** clearly in this structure:
     - **Version**: moved from X → Y
     - **What broke** (each specific error message, not vague descriptions)
     - **What you fixed** (each code change, the file, and why it was needed)
@@ -196,9 +198,10 @@ only when needed and keep the change minimal.
    - If tests fail, diagnose and fix the smallest applicable breaking change.
    - If you cannot fix that package after 5 honest attempts, revert ONLY that \
 package's changes and continue with the remaining queue. Clearly report it.
-7. Use npm_view, npm_releases, fetch_releases, and fetch_url only when a package \
-upgrade causes a failure or when a major-version jump looks risky. Do not spend \
-the whole run researching every package up front.
+7. Use dependency_research before risky major jumps, then npm_view, \
+npm_releases, fetch_releases, and fetch_url only when a package upgrade causes \
+a failure or when the major-version span looks risky. Do not spend the whole \
+run researching every package up front.
 
 ### Phase 3: Final verification
 8. After the queue is complete, run the full test command again and read the \

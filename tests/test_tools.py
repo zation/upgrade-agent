@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -104,3 +105,47 @@ def test_glob_matches(ctx):
 
     res = Glob().run({"pattern": "**/*.js"}, ctx)
     assert "src/a.js" in res.output
+
+
+# --- dependency research --- #
+
+
+def test_dependency_research_summarizes_registry_metadata(monkeypatch, ctx):
+    from refactor_agent.tools import read_only_tools
+    from refactor_agent.tools.npm import DependencyResearch
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "name": "chai",
+                "description": "BDD/TDD assertion library",
+                "dist-tags": {"latest": "5.1.2"},
+                "repository": {"url": "git+https://github.com/chaijs/chai.git"},
+                "homepage": "https://www.chaijs.com",
+                "versions": {
+                    "4.0.0": {},
+                    "4.5.0": {},
+                    "5.0.0": {},
+                    "5.1.2": {},
+                },
+            }
+
+    def fake_get(url, timeout):
+        assert url == "https://registry.npmjs.org/chai"
+        assert timeout == 20
+        return FakeResponse()
+
+    monkeypatch.setattr("refactor_agent.tools.npm.httpx.get", fake_get)
+
+    res = DependencyResearch().run({"name": "chai", "current": "^4.0.0"}, ctx)
+    data = json.loads(res.output)
+
+    assert not res.is_error
+    assert data["latest"] == "5.1.2"
+    assert data["target"] == "5.1.2"
+    assert data["major_span"] == "4->5"
+    assert "https://github.com/chaijs/chai/releases" in data["candidate_sources"]
+    assert any("Major-version upgrade" in hint for hint in data["risk_hints"])
+    assert "dependency_research" in {tool.name for tool in read_only_tools()}

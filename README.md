@@ -19,6 +19,8 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 - **M2 ✅** — `upgrade` command completed and verified for real single-dependency upgrades.
 - **M3 🚧** — `upgrade-all` works for direct dependency upgrades; LangGraph
   `upgrade-graph` now adds a verify → self-heal workflow for single-dep upgrades.
+- **M5 🚧** — `dependency_research` starts the changelog/RAG track by producing
+  structured npm metadata, version-span, and candidate release-note sources.
 
 ## Techniques covered
 
@@ -31,7 +33,7 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 | Multi-step planning (Plan-and-Execute) | `orchestrator/` | 🚧 |
 | State-graph orchestration | LangGraph `StateGraph` in `orchestrator/upgrade_graph.py` | ✅ |
 | Self-healing / reflection | `verify → self-heal` edge in `orchestrator/upgrade_graph.py` | ✅ |
-| RAG | changelog / release-notes retrieval | ⏳ M4 |
+| RAG | `dependency_research` seeds changelog / release-note sources | 🚧 |
 | Sub-agent | "breaking-change researcher" | ⏳ M4 |
 | Context engineering | `core/context.py` (budget + compaction) | ✅ |
 | Evals | `evals/` | ⏳ M5 |
@@ -97,6 +99,6 @@ Day-to-day rules for contributors/agents: see [AGENTS.md](AGENTS.md).
 - **M2 ✅** real single-dependency upgrade (mocha 4→11) with baseline/verify.
 - **M3 🚧** real all-dependencies upgrade with baseline/verify.
 - **M4 🚧** LangGraph `StateGraph` + `verify → self-heal` edge.
-- **M5** RAG changelog retrieval + "breaking-change researcher" sub-agent.
+- **M5 🚧** RAG changelog retrieval + "breaking-change researcher" sub-agent.
 - **M6** eval harness + CLI polish.
 - **M7** add-tests skill.

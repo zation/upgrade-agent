@@ -12,10 +12,11 @@ from ..core.types import Tool
 from .changelog import FetchReleases, FetchUrl
 from .fs import EditFile, Glob, Grep, ReadFile, WriteFile
 from .git import GitDiff, GitStatus
-from .npm import NpmOutdated, NpmReleases, NpmView
+from .npm import DependencyResearch, NpmOutdated, NpmReleases, NpmView
 from .shell import RunCommand
 
 __all__ = [
+    "DependencyResearch",
     "EditFile",
     "FetchReleases",
     "FetchUrl",
@@ -43,6 +44,7 @@ def read_only_tools() -> list[Tool]:
         GitStatus(),
         GitDiff(),
         NpmOutdated(),
+        DependencyResearch(),
         NpmView(),
         NpmReleases(),
         FetchReleases(),
@@ -66,6 +68,7 @@ def default_tools() -> list[Tool]:
         GitStatus(),
         GitDiff(),
         NpmOutdated(),
+        DependencyResearch(),
         NpmView(),
         NpmReleases(),
         FetchReleases(),
