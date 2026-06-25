@@ -2,12 +2,14 @@
 
     uv run refactor-agent analyze ../some-project
     uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
+    uv run refactor-agent upgrade-graph ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade-all ../some-project
     uv run refactor-agent ask ../some-project "any free-form task"
 
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
 - ``upgrade`` — full-tool upgrade of ONE dependency (baseline → change → verify).
+- ``upgrade-graph`` — LangGraph-orchestrated upgrade with verify → self-heal.
 - ``upgrade-all`` — full-tool upgrade of all direct dependencies, one at a time.
 - ``ask``     — give the agent any task against a project, with full tools.
 
@@ -23,7 +25,8 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from ..core import AgentConfig, ReActLoop, create_client
+from ..core import AgentConfig, LoopResult, ReActLoop, create_client
+from ..orchestrator import UpgradeGraphRunner
 from ..skills import ANALYZE, BASE_AGENT, UPGRADE, UPGRADE_ALL
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
@@ -122,6 +125,50 @@ def upgrade(
         "what broke and what you fixed."
     )
     result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command("upgrade-graph")
+def upgrade_graph(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    target: str = typer.Argument(..., help='Upgrade target, e.g. "mocha 4 -> 11".'),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(40, "--max-iters"),
+    max_heal_attempts: int = typer.Option(1, "--max-heal-attempts"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Upgrade one dependency through a LangGraph execute → verify → heal flow."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]graph upgrade[/bold] {target} in {workdir}")
+
+    client = create_client()
+    ui = RichUI(verbose=verbose)
+
+    def run_loop(system_prompt: str, task: str) -> LoopResult:
+        loop = ReActLoop(
+            client=client,
+            config=AgentConfig(
+                model=model, system_prompt=system_prompt, max_iterations=max_iterations
+            ),
+            tools=default_tools(),
+            workdir=workdir,
+            callbacks=ui,
+        )
+        return loop.run(task)
+
+    execute_task = (
+        f"Upgrade the dependency: {target}.\n\n"
+        "Establish a green baseline, make the minimal version/code change, and "
+        "run the tests once after the change. A separate graph node will perform "
+        "final verification, so finish with a concise summary of what changed."
+    )
+    runner = UpgradeGraphRunner(
+        execute=lambda _: run_loop(UPGRADE, execute_task),
+        verify=lambda task: run_loop(BASE_AGENT, task),
+        heal=lambda task: run_loop(UPGRADE, task),
+        max_heal_attempts=max_heal_attempts,
+    )
+    result = runner.run(execute_task)
     raise typer.Exit(code=0 if result.ok else 1)
 
 

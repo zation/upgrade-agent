@@ -21,7 +21,9 @@ broadest set of generic AI-Agent techniques (for study + resume).
   upgrades. Baseline confirmed: `chai-like` = 28 passing, 100% cov.
 - **M3 🚧** — `upgrade-all` CLI command is the next workflow: upgrade direct
   dependencies one at a time with baseline/per-package/final verification.
-- M4–M6 not started (see Roadmap in README.md).
+- **M4 🚧** — LangGraph `upgrade-graph` orchestration is being added as a thin
+  workflow layer around the hand-written ReAct loop.
+- M5–M6 not started (see Roadmap in README.md).
 
 ## Ground rules — READ BEFORE ACTING
 
@@ -49,6 +51,7 @@ uv run pytest -v
 # run the agent against a target project (needs .env with LLM_API_KEY)
 uv run refactor-agent analyze   /Users/liuyang/Projects/chai-like
 uv run refactor-agent upgrade   /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
+uv run refactor-agent upgrade-graph /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-all /Users/liuyang/Projects/chai-like
 uv run refactor-agent ask       /Users/liuyang/Projects/chai-like "your task"
 ```
@@ -60,6 +63,7 @@ src/refactor_agent/
   core/        hand-written agent base — MODEL-AGNOSTIC + TASK-AGNOSTIC
   tools/       the agent's tool belt — TASK-SPECIFIC but model-agnostic
   skills/      domain prompts (analyze / upgrade) + later sub-graphs
+  orchestrator/ LangGraph workflows that compose ReAct runs
   cli/         typer entrypoint + rich live UI (LoopCallbacks)
 ```
 

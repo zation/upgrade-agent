@@ -15,6 +15,7 @@ def test_help_lists_upgrade_all_command():
 
     assert result.exit_code == 0
     assert "upgrade-all" in result.output
+    assert "upgrade-graph" in result.output
 
 
 def test_upgrade_all_prompt_encodes_incremental_workflow():
