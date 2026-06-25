@@ -1,6 +1,7 @@
 """CLI entrypoint.
 
     uv run refactor-agent analyze ../some-project
+    uv run refactor-agent research-upgrade ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade-graph ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade-all ../some-project
@@ -8,6 +9,7 @@
 
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
+- ``research-upgrade`` — read-only breaking-change research for one upgrade.
 - ``upgrade`` — full-tool upgrade of ONE dependency (baseline → change → verify).
 - ``upgrade-graph`` — LangGraph-orchestrated upgrade with verify → self-heal.
 - ``upgrade-all`` — full-tool upgrade of all direct dependencies, one at a time.
@@ -27,7 +29,7 @@ from rich.console import Console
 
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
 from ..orchestrator import UpgradeGraphRunner
-from ..skills import ANALYZE, BASE_AGENT, UPGRADE, UPGRADE_ALL
+from ..skills import ANALYZE, BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_ALL
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
 
@@ -91,6 +93,39 @@ def analyze(
         "Analyze this project and produce an upgrade-readiness profile. "
         "Read package.json, the main source files, and CI config; then summarize "
         "dependencies, tech/style signals, and upgrade risks."
+    )
+    result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command("research-upgrade")
+def research_upgrade(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    target: str = typer.Argument(..., help='Upgrade target, e.g. "mocha 4 -> 11".'),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(20, "--max-iters"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Read-only breaking-change research for one dependency upgrade."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]researching upgrade[/bold] {target} in {workdir}")
+
+    client = create_client()
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            model=model,
+            system_prompt=BREAKING_CHANGE_RESEARCHER,
+            max_iterations=max_iterations,
+        ),
+        tools=read_only_tools(),
+        workdir=workdir,
+        callbacks=RichUI(verbose=verbose),
+    )
+    task = (
+        f"Research this dependency upgrade without editing files: {target}.\n\n"
+        "Use package metadata, release/changelog sources, and project usage search "
+        "to identify relevant breaking changes. End with the required verdict line."
     )
     result = loop.run(task)
     raise typer.Exit(code=0 if result.ok else 1)

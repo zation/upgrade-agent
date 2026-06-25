@@ -20,7 +20,8 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 - **M3 🚧** — `upgrade-all` works for direct dependency upgrades; LangGraph
   `upgrade-graph` now adds a verify → self-heal workflow for single-dep upgrades.
 - **M5 🚧** — `dependency_research` starts the changelog/RAG track by producing
-  structured npm metadata, version-span, and candidate release-note sources.
+  structured npm metadata, version-span, and candidate release-note sources;
+  `research-upgrade` adds a read-only breaking-change researcher flow.
 
 ## Techniques covered
 
@@ -34,7 +35,7 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 | State-graph orchestration | LangGraph `StateGraph` in `orchestrator/upgrade_graph.py` | ✅ |
 | Self-healing / reflection | `verify → self-heal` edge in `orchestrator/upgrade_graph.py` | ✅ |
 | RAG | `dependency_research` seeds changelog / release-note sources | 🚧 |
-| Sub-agent | "breaking-change researcher" | ⏳ M4 |
+| Sub-agent | `research-upgrade` read-only breaking-change researcher | ✅ |
 | Context engineering | `core/context.py` (budget + compaction) | ✅ |
 | Evals | `evals/` | ⏳ M5 |
 | Observability | JSONL traces (`core/trace.py`) + rich CLI | ✅ |
@@ -60,6 +61,7 @@ cd ../chai-like && npm install   # establish a working baseline
 
 # 4. Run the agent against it
 uv run refactor-agent analyze ../chai-like
+uv run refactor-agent research-upgrade ../chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade ../chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-graph ../chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-all ../chai-like
@@ -71,6 +73,7 @@ uv run refactor-agent ask       ../chai-like "any free-form task"
 | Command | Tools | Purpose |
 |---------|-------|---------|
 | `analyze <project>` | read-only | Profile a project; report upgrade risks. |
+| `research-upgrade <project> "<dep>"` | read-only | Research relevant breaking changes before editing. |
 | `upgrade <project> "<dep>"` | full | Upgrade ONE dep: baseline → change → verify. |
 | `upgrade-graph <project> "<dep>"` | full | Upgrade ONE dep via LangGraph: execute → verify → self-heal. |
 | `upgrade-all <project>` | full | Upgrade all direct deps one at a time: baseline → queue → per-dep verify → final verify. |

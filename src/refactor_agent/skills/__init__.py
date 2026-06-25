@@ -6,6 +6,6 @@ generic ReActLoop can be pointed at a specific job ("analyze", "upgrade", …).
 
 from __future__ import annotations
 
-from .prompts import ANALYZE, BASE_AGENT, UPGRADE, UPGRADE_ALL
+from .prompts import ANALYZE, BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_ALL
 
-__all__ = ["ANALYZE", "BASE_AGENT", "UPGRADE", "UPGRADE_ALL"]
+__all__ = ["ANALYZE", "BASE_AGENT", "BREAKING_CHANGE_RESEARCHER", "UPGRADE", "UPGRADE_ALL"]

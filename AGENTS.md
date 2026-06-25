@@ -25,6 +25,7 @@ broadest set of generic AI-Agent techniques (for study + resume).
   workflow layer around the hand-written ReAct loop.
 - **M5 🚧** — changelog/RAG groundwork started with `dependency_research`, a
   read-only npm research tool that returns version spans and candidate sources.
+  `research-upgrade` is the read-only breaking-change researcher command.
 - M6 not started (see Roadmap in README.md).
 
 ## Ground rules — READ BEFORE ACTING
@@ -52,6 +53,7 @@ uv run pytest -v
 
 # run the agent against a target project (needs .env with LLM_API_KEY)
 uv run refactor-agent analyze   /Users/liuyang/Projects/chai-like
+uv run refactor-agent research-upgrade /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade   /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-graph /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-all /Users/liuyang/Projects/chai-like
