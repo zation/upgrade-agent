@@ -83,7 +83,18 @@ class RichUI:
         if result.error:
             self.console.print(f"  error:  [red]{result.error}[/red]")
         self.console.print()
-        self.console.print(Panel(result.final_text, border_style="green", title="result"))
+        if result.final_text.strip():
+            self.console.print(
+                Panel(
+                    result.final_text,
+                    border_style="bold green",
+                    title="UPGRADE REPORT",
+                    title_align="center",
+                    padding=(1, 2),
+                )
+            )
+        else:
+            self.console.print("[dim](no report produced)[/dim]")
 
 
 def _truncate(text: str, limit: int) -> str:
