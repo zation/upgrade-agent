@@ -130,7 +130,7 @@
 ### M6.2 generate-tests 执行技能
 
 - [x] 对每个缺口，用 ReActLoop 生成测试代码
-- [ ] 写入 `test/*.test.js`（遵守项目现有测试风格）
+- [x] 写入 `test/*.test.js`（遵守项目现有测试风格）
 - [x] 跑 `npm test` 验证新测试通过且覆盖率提升
 - [x] CLI 新增 `generate-tests` 执行入口
 

@@ -47,5 +47,7 @@ def test_add_tests_generate_prompt_requires_existing_style_and_verification():
     assert hasattr(skills, "ADD_TESTS_GENERATE")
     assert "generate tests" in skills.ADD_TESTS_GENERATE
     assert "Follow the existing test style" in skills.ADD_TESTS_GENERATE
+    assert "test/*.test.js" in skills.ADD_TESTS_GENERATE
+    assert "If no npm test script exists" in skills.ADD_TESTS_GENERATE
     assert "Run npm test" in skills.ADD_TESTS_GENERATE
     assert "coverage improves" in skills.ADD_TESTS_GENERATE
