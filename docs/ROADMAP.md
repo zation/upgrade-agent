@@ -20,8 +20,8 @@
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
-| M7 | 🚧 | Prompt / Skill 质量 | 已开始：共享片段与 prompt contract tests |
-| M8 | ⏳ | 结构化状态与运行时 Guardrails | Prompt 整理后再做 |
+| M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
+| M8 | ⏳ | 结构化状态与运行时 Guardrails | 下一阶段优先做 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -202,9 +202,9 @@
 
 ---
 
-## M7：Prompt / Skill 质量
+## M7：Prompt / Skill 质量 v1
 
-**状态**：🚧 进行中
+**状态**：✅ 已完成
 
 **目标**：先整理 prompt/skill，减少长 prompt 带来的成本和遗忘风险，为后续 guardrails 与结构化状态打基础。
 
@@ -219,20 +219,20 @@
   - `UPGRADE_ALL` 和 `generate-tests` 已使用结构化 renderer；`generate-tests` 复用 test generation
     workflow section。
   - `analyze` 和 `analyze-coverage` 已使用结构化 renderer，并显式挂载 read-only contract。
-- [ ] 继续瘦身 prompt：
+- [x] 继续瘦身 prompt v1：
   - 已删除 `upgrade` / `upgrade-all` 中被共享 contracts 覆盖的重复 legacy rules。
   - `BASE_AGENT` 已删除工具清单，只保留全局原则。
-  - task prompt 只描述本任务策略、输出格式和少量特殊规则。
-- [ ] 清理 prompt 与 runtime 的职责边界：
-  - prompt 保留“为什么要做”和异常时如何报告。
-  - 可程序化强制的规则移到 M8 guardrails。
+  - task prompt 已按 section 拆分；后续更深的成本驱动瘦身移到 M9。
+- [x] 清理 prompt 与 runtime 的职责边界 v1：
+  - `rendering.py` 明确 prompt contracts 只渲染为文本，不做 runtime enforcement。
+  - 可程序化强制的规则放入 M8 guardrails。
 - [x] 增加 prompt contract tests：
   - `upgrade` prompt 必须包含 baseline / verify / minimal change。
   - `upgrade-all` prompt 必须包含 one dependency at a time。
   - `research-upgrade` prompt 必须包含 read-only / sources / verdict。
   - `generate-tests` prompt 必须包含 existing style / baseline / verify。
 - [x] 为 `upgrade`、`upgrade-all`、`research-upgrade`、`generate-tests` 维护最小 eval fixtures。
-- [ ] 根据 eval 结果删减 prompt 中过度重复或成本高的段落。
+- [x] 建立 prompt size baseline：
   - 已增加 prompt 字符数统计 helper，后续可用来比较瘦身前后变化。
 
 **验收标准**
