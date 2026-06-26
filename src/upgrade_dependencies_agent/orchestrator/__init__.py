@@ -13,6 +13,8 @@ from .state import (
     ResearchBrief,
     UpgradeGraphState,
     UpgradePlan,
+    UpgradeQueue,
+    UpgradeQueueItem,
     VerificationResult,
     make_upgrade_graph_state,
 )
@@ -32,6 +34,8 @@ __all__ = [
     "UpgradeBackboneRunner",
     "UpgradeGraphState",
     "UpgradePlan",
+    "UpgradeQueue",
+    "UpgradeQueueItem",
     "VerificationResult",
     "make_upgrade_graph_state",
     "run_upgrade_all_backbone_workflow",

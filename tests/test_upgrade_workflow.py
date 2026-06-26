@@ -115,6 +115,21 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
 
     def run_loop(request: StageLoopRequest) -> LoopResult:
         requests.append(request)
+        if request.stage == "queue":
+            return _result(
+                """
+                {
+                  "packages": [
+                    {
+                      "name": "mocha",
+                      "current_version": "4.0.0",
+                      "target_version": "11.0.0",
+                      "dependency_type": "devDependency"
+                    }
+                  ]
+                }
+                """
+            )
         if request.stage == "verify":
             return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
         return _result("stage complete")
@@ -142,9 +157,12 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert requests[0].read_only is False
     assert requests[1].read_only is True
     assert "npm_outdated" in requests[1].task
+    assert '"packages"' in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
+    assert "mocha" in requests[2].task
     assert "exactly one direct package at a time" in requests[2].task
     assert '"ok"' in requests[3].task
+    assert result.state["queue"].packages[0].name == "mocha"
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
@@ -154,6 +172,11 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         nonlocal verify_calls
         requests.append(request)
+        if request.stage == "queue":
+            return _result(
+                '{"packages": [{"name": "mocha", "current_version": "4.0.0", '
+                '"target_version": "11.0.0", "dependency_type": "devDependency"}]}'
+            )
         if request.stage == "verify":
             verify_calls += 1
             if verify_calls == 1:

@@ -122,7 +122,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 
 - baseline 节点建立升级前测试基线。
 - 单依赖 research 节点只读研究 breaking changes。
-- 批量 queue 节点只读生成 direct dependency 升级队列摘要。
+- 批量 queue 节点只读生成结构化 direct dependency 升级队列。
 - plan 节点生成最小升级计划。
 - execute 节点执行升级。
 - verify 节点独立验证结果。

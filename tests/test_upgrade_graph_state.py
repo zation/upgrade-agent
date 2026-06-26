@@ -7,6 +7,8 @@ from upgrade_dependencies_agent.orchestrator.state import (
     GraphPhase,
     ResearchBrief,
     UpgradePlan,
+    UpgradeQueue,
+    UpgradeQueueItem,
     VerificationResult,
     make_upgrade_graph_state,
 )
@@ -22,6 +24,7 @@ def test_make_upgrade_graph_state_sets_baseline_first_defaults() -> None:
     assert state["max_heal_attempts"] == 2
     assert state["history"] == []
     assert state["changed_files"] == []
+    assert state["queue"] is None
 
 
 def test_make_upgrade_graph_state_can_start_at_execute_for_legacy_runner() -> None:
@@ -79,3 +82,27 @@ def test_structured_artifacts_are_json_serializable() -> None:
         "package-lock.json",
     ]
     assert verification.model_dump(mode="json")["ok"] is True
+
+
+def test_upgrade_queue_tracks_ordered_package_status() -> None:
+    queue = UpgradeQueue(
+        packages=[
+            UpgradeQueueItem(
+                name="mocha",
+                current_version="4.0.0",
+                target_version="11.0.0",
+                dependency_type="devDependency",
+            ),
+            UpgradeQueueItem(
+                name="nyc",
+                current_version="11.0.0",
+                target_version="17.0.0",
+                dependency_type="devDependency",
+                status="failed",
+                reason="coverage command changed",
+            ),
+        ]
+    )
+
+    assert [item.name for item in queue.pending()] == ["mocha"]
+    assert queue.model_dump(mode="json")["packages"][1]["status"] == "failed"

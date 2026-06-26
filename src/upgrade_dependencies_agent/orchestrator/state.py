@@ -48,6 +48,31 @@ class UpgradePlan(BaseModel):
     allowed_files: list[str] = Field(default_factory=list)
 
 
+QueueItemStatus = Literal["pending", "done", "failed", "skipped"]
+DependencyType = Literal["dependency", "devDependency"]
+
+
+class UpgradeQueueItem(BaseModel):
+    """One direct dependency planned for batch upgrade."""
+
+    name: str
+    current_version: str | None = None
+    target_version: str | None = None
+    dependency_type: DependencyType
+    status: QueueItemStatus = "pending"
+    reason: str | None = None
+
+
+class UpgradeQueue(BaseModel):
+    """Ordered direct-dependency queue for batch upgrades."""
+
+    packages: list[UpgradeQueueItem] = Field(default_factory=list)
+
+    def pending(self) -> list[UpgradeQueueItem]:
+        """Return queue items that still need an upgrade attempt."""
+        return [item for item in self.packages if item.status == "pending"]
+
+
 class VerificationResult(BaseModel):
     """Structured verification result for a command or graph stage."""
 
@@ -74,6 +99,7 @@ class UpgradeGraphState(TypedDict, total=False):
     baseline: BaselineState
     research: ResearchBrief | None
     plan: UpgradePlan | None
+    queue: UpgradeQueue | None
     verification: VerificationResult | None
     report: AgentReport | None
     current_dependency: str | None
@@ -101,6 +127,7 @@ def make_upgrade_graph_state(
         "baseline": BaselineState(),
         "research": None,
         "plan": None,
+        "queue": None,
         "verification": None,
         "report": None,
         "current_dependency": None,

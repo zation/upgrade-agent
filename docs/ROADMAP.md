@@ -257,6 +257,8 @@
   - `UpgradePlan`
   - `VerificationResult`
   - `AgentReport`
+  - `UpgradeQueue`
+  - `UpgradeQueueItem`
   - `UpgradeGraphState`
 - [x] LangGraph backbone skeleton v1：
   - baseline → research → plan → execute → verify → report。
@@ -268,9 +270,10 @@
   - baseline / research / plan / execute / verify / heal / report 已作为 graph stage 串联。
 - [x] LangGraph structured artifacts v1：
   - verify 节点优先解析 JSON `VerificationResult`，并保留 legacy verdict fallback。
+  - `upgrade-all` queue 节点优先解析 JSON `UpgradeQueue`。
 - [ ] LangGraph structured artifacts 后续：
   - baseline / research / plan / report 阶段通过 structured output 稳定产出 artifact。
-  - `upgrade-all` 的 queue 从自然语言摘要升级为结构化 package 队列，并支持更精确的逐包 state。
+  - `upgrade-all` 基于结构化 package queue 支持更精确的逐包 state 和循环。
 - [x] `core/structured.py` v1：从模型文本中提取 JSON object，并用 Pydantic schema 校验。
 - [ ] provider 原生 structured output：
   - 封装 Claude / OpenAI-compatible 的 JSON / response-format 参数。

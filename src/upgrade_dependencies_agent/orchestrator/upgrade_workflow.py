@@ -14,6 +14,7 @@ from .state import (
     ResearchBrief,
     UpgradeGraphState,
     UpgradePlan,
+    UpgradeQueue,
     VerificationResult,
 )
 from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
@@ -196,6 +197,7 @@ def run_upgrade_all_backbone_workflow(
         )
         return {
             **state,
+            "queue": _queue_from_result(result),
             "research": ResearchBrief(
                 package=target,
                 relevant_risks=[result.final_text],
@@ -356,13 +358,25 @@ def _batch_queue_task() -> str:
         "Build the batch upgrade queue without editing files.\n\n"
         "Run npm_outdated and inspect package.json. Identify direct dependencies "
         "and devDependencies only, exclude transitive dependencies, and recommend "
-        "a safe one-package-at-a-time order. Do not edit files."
+        "a safe one-package-at-a-time order. Do not edit files. Return exactly one "
+        "JSON object with this shape: "
+        '{"packages": [{"name": "mocha", "current_version": "4.0.0", '
+        '"target_version": "11.0.0", "dependency_type": "devDependency", '
+        '"status": "pending", "reason": null}]}.'
     )
 
 
 def _batch_execute_task(state: UpgradeGraphState) -> str:
-    research = state.get("research")
-    queue_summary = "\n".join(research.relevant_risks if research else []) or "(no queue summary)"
+    queue = state.get("queue")
+    queue_summary = (
+        "\n".join(
+            f"- {item.name}: {item.current_version or '?'} -> {item.target_version or '?'} "
+            f"({item.dependency_type}, {item.status})"
+            for item in queue.packages
+        )
+        if queue
+        else "(no structured queue)"
+    )
     return (
         "Upgrade all direct npm dependencies and devDependencies to their latest "
         "stable versions.\n\n"
@@ -423,6 +437,13 @@ def _verification_from_result(result: LoopResult) -> VerificationResult:
             command="npm test",
             summary=result.final_text,
         )
+
+
+def _queue_from_result(result: LoopResult) -> UpgradeQueue:
+    try:
+        return parse_structured_text(result.final_text, UpgradeQueue)
+    except StructuredParseError:
+        return UpgradeQueue()
 
 
 def _dependency_name(target: str) -> str:
