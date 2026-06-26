@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..fragments import BASELINE_RULE, TEST_STYLE_RULE, VERIFY_RULE
 from ..prompts import BASE_AGENT
 
 ADD_TESTS_ANALYZE = (
@@ -48,6 +49,15 @@ ADD_TESTS_GENERATE = (
 
 You generate tests for existing JavaScript/TypeScript behavior. Follow the existing test style
 and make the smallest useful test additions.
+
+Shared contracts:
+- """
+    + TEST_STYLE_RULE
+    + "\n- "
+    + BASELINE_RULE
+    + "\n- "
+    + VERIFY_RULE
+    + """
 
 Workflow:
 1. Establish a green baseline first. Read package.json, run npm test, and record

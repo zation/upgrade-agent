@@ -20,7 +20,7 @@
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
-| M7 | ⏳ | Prompt / Skill 质量 | 下一阶段优先做 |
+| M7 | 🚧 | Prompt / Skill 质量 | 已开始：共享片段与 prompt contract tests |
 | M8 | ⏳ | 结构化状态与运行时 Guardrails | Prompt 整理后再做 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
@@ -204,20 +204,23 @@
 
 ## M7：Prompt / Skill 质量
 
-**状态**：⏳ 未开始
+**状态**：🚧 进行中
 
 **目标**：先整理 prompt/skill，减少长 prompt 带来的成本和遗忘风险，为后续 guardrails 与结构化状态打基础。
 
 **计划**
 
-- [ ] 拆分 prompt 层级：
+- [x] 拆分 prompt 层级 v1：
+  - 重复规则已提取为共享片段，例如 baseline rule、verify rule、minimal-change rule、
+    read-only rule、source-evidence rule、test-style rule。
+  - task prompt 已开始显式引用共享 contracts。
+- [ ] 继续瘦身 prompt：
   - `BASE_AGENT` 只保留全局原则。
   - task prompt 只描述本任务策略、输出格式和少量特殊规则。
-  - 重复规则提取为共享片段，例如 baseline rule、verify rule、report rule。
 - [ ] 清理 prompt 与 runtime 的职责边界：
   - prompt 保留“为什么要做”和异常时如何报告。
   - 可程序化强制的规则移到 M8 guardrails。
-- [ ] 增加 prompt contract tests：
+- [x] 增加 prompt contract tests：
   - `upgrade` prompt 必须包含 baseline / verify / minimal change。
   - `upgrade-all` prompt 必须包含 one dependency at a time。
   - `research-upgrade` prompt 必须包含 read-only / sources / verdict。
