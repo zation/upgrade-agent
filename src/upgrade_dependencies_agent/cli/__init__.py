@@ -5,7 +5,6 @@
     uv run upgrade-dependencies-agent generate-tests ../some-project "cover src/foo edge cases"
     uv run upgrade-dependencies-agent research-upgrade ../some-project "mocha 4 -> 11"
     uv run upgrade-dependencies-agent upgrade ../some-project "mocha 4 -> 11"
-    uv run upgrade-dependencies-agent upgrade-graph ../some-project "mocha 4 -> 11"  # compat alias
     uv run upgrade-dependencies-agent upgrade-all ../some-project
     uv run upgrade-dependencies-agent ask ../some-project "any free-form task"
 
@@ -15,7 +14,6 @@ Commands:
 - ``generate-tests`` — add focused tests and verify them.
 - ``research-upgrade`` — read-only breaking-change research for one upgrade.
 - ``upgrade`` — LangGraph-backed upgrade of ONE dependency.
-- ``upgrade-graph`` — compatibility alias for the graph-backed upgrade flow.
 - ``upgrade-all`` — graph-backed batch upgrade of direct dependencies.
 - ``ask``     — give the agent any task against a project, with full tools.
 
@@ -311,30 +309,6 @@ def upgrade(
         model=model,
         max_iterations=max_iterations,
         max_heal_attempts=1,
-        workdir=workdir,
-        ui=RichUI(verbose=verbose),
-    )
-    raise typer.Exit(code=0 if ok else 1)
-
-
-@app.command("upgrade-graph")
-def upgrade_graph(
-    project: Path = typer.Argument(..., help="Path to the target project."),
-    target: str = typer.Argument(..., help='Upgrade target, e.g. "mocha 4 -> 11".'),
-    model: str = typer.Option(_default_model(), "--model", "-m"),
-    max_iterations: int = typer.Option(40, "--max-iters"),
-    max_heal_attempts: int = typer.Option(1, "--max-heal-attempts"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-) -> None:
-    """Compatibility alias for the graph-backed single-dependency upgrade."""
-    workdir = _resolve_workdir(project)
-    console.rule(f"[bold]graph upgrade[/bold] {target} in {workdir}")
-
-    ok = _run_upgrade_backbone_cli(
-        target=target,
-        model=model,
-        max_iterations=max_iterations,
-        max_heal_attempts=max_heal_attempts,
         workdir=workdir,
         ui=RichUI(verbose=verbose),
     )

@@ -23,7 +23,7 @@ def test_help_lists_upgrade_all_command():
     assert "generate-tests" in result.output
     assert "research-upgrade" in result.output
     assert "upgrade-all" in result.output
-    assert "upgrade-graph" in result.output
+    assert "upgrade-graph" not in result.output
 
 
 def test_breaking_change_researcher_prompt_is_read_only():
@@ -57,34 +57,13 @@ def test_add_tests_generate_prompt_requires_existing_style_and_verification():
     assert "coverage improves" in skills.ADD_TESTS_GENERATE
 
 
-def test_upgrade_graph_cli_uses_backbone_workflow(monkeypatch, tmp_path):
-    calls: dict[str, object] = {}
-
-    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop):
-        calls["target"] = target
-        calls["max_heal_attempts"] = max_heal_attempts
-        calls["run_loop"] = run_loop
-        return SimpleNamespace(ok=True)
-
-    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
-    monkeypatch.setattr(cli, "create_client", lambda: object())
+def test_upgrade_graph_cli_is_removed(tmp_path):
     runner = CliRunner()
 
-    result = runner.invoke(
-        app,
-        [
-            "upgrade-graph",
-            str(tmp_path),
-            "mocha 4 -> 11",
-            "--max-heal-attempts",
-            "2",
-        ],
-    )
+    result = runner.invoke(app, ["upgrade-graph", str(tmp_path), "mocha 4 -> 11"])
 
-    assert result.exit_code == 0
-    assert calls["target"] == "mocha 4 -> 11"
-    assert calls["max_heal_attempts"] == 2
-    assert callable(calls["run_loop"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):

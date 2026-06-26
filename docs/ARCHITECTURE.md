@@ -23,7 +23,7 @@
 | 文件路径隔离 | `tools/_common.py` 的 `safe_resolve()` | ✅ |
 | npm / changelog research | `tools/npm.py`、`tools/changelog.py` | ✅ v1 |
 | LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
-| 自修复边 | `upgrade` / `upgrade-graph` 的 verify → heal | ✅ v1 |
+| 自修复边 | `upgrade` / `upgrade-all` 的 verify → heal | ✅ v1 |
 | 确定性 eval | `evals/runner.py` | ✅ v1 |
 | 结构化输出与 runtime guardrails | Roadmap M8 | ⏳ |
 | 深度 RAG | Roadmap M10 | ⏳ |
@@ -111,14 +111,13 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 | `research-upgrade` | 只读研究一个依赖升级。 |
 | `upgrade` | 标准单依赖升级入口，使用 LangGraph backbone。 |
 | `upgrade-all` | 批量升级入口，使用 batch backbone。 |
-| `upgrade-graph` | 兼容 alias，行为与 `upgrade` 同源，后续可能移除。 |
 | `ask` | 任意任务，可用 `--read-only` 限制权限。 |
 
 ## LangGraph 编排
 
 `orchestrator/upgrade_backbone.py` 和 `orchestrator/upgrade_workflow.py`
 当前承载单依赖与批量升级的 LangGraph backbone；`orchestrator/upgrade_graph.py`
-保留旧 thin graph 实现，主要用于兼容和对照测试。
+保留旧 thin graph 实现，主要用于对照测试。
 
 已实现：
 

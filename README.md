@@ -27,7 +27,6 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 - 依赖升级 workflow：
   - `upgrade`：单依赖标准入口，使用 LangGraph backbone 执行 baseline → research → plan → execute → verify → report。
   - `upgrade-all`：批量升级入口，使用 batch backbone 执行 baseline → queue → execute → verify → report。
-  - `upgrade-graph`：兼容 alias，后续会收敛到 `upgrade`。
 - 研究 workflow：`research-upgrade` 只读分析 breaking changes，并结合项目使用方式判断风险。
 - 补测试 workflow：
   - `analyze-coverage`：只读分析测试缺口。
@@ -45,7 +44,7 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 | Function Calling / Tool Use | `core/types.py`、`core/llm_client.py` | ✅ |
 | 多模型适配 | `core/llm_client.py` | ✅ |
 | LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
-| Self-healing / Reflection | `upgrade` / `upgrade-graph` 的 verify → heal 边 | ✅ v1 |
+| Self-healing / Reflection | `upgrade` / `upgrade-all` 的 verify → heal 边 | ✅ v1 |
 | Research / RAG groundwork | `dependency_research`、`fetch_releases`、`fetch_url` | ✅ groundwork |
 | 只读研究子流程 | `research-upgrade` | ✅ |
 | Context engineering | `core/context.py` | ✅ v1 |
@@ -91,7 +90,6 @@ uv run upgrade-dependencies-agent ask ../chai-like "your task"
 | `generate-tests <project> [focus]` | 完整工具 | 添加聚焦测试，并运行测试和 coverage 验证。 |
 | `research-upgrade <project> "<dep>"` | 只读 | 升级前研究 breaking changes。 |
 | `upgrade <project> "<dep>"` | 完整工具 | 标准单依赖升级入口：baseline → research → plan → execute → verify → report。 |
-| `upgrade-graph <project> "<dep>"` | 完整工具 | 兼容 alias，行为与 `upgrade` 同源，后续可能移除。 |
 | `upgrade-all <project>` | 完整工具 | 批量升级所有直接依赖：baseline → queue → execute → verify → report。 |
 | `ask <project> "<task>"` | 默认完整工具 | 执行任意任务；可加 `--read-only` 禁用写入和 shell。 |
 

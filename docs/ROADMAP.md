@@ -16,7 +16,7 @@
 |-----------|------|------|----------|
 | M1 | ✅ | Agent Core v1 | 手写 ReAct loop、工具协议、路径安全、trace 已完成 |
 | M2 | ✅ | 单依赖升级 v1 | `upgrade` 已能完成真实单依赖升级闭环 |
-| M3 | ✅ | 批量升级与薄 LangGraph 编排 v1 | `upgrade-all`、`upgrade-graph` 已有可用 v1 |
+| M3 | ✅ | 批量升级与薄 LangGraph 编排 v1 | `upgrade-all` 与早期薄 graph 示例已完成 |
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
@@ -101,7 +101,7 @@
 - [x] `upgrade-all` CLI：按 direct dependency 逐个升级的 workflow 已落地。
 - [x] `UPGRADE_ALL` prompt：包含 baseline、queue、per-package verify、final verify。
 - [x] `orchestrator/upgrade_graph.py`：薄 LangGraph workflow。
-- [x] `upgrade-graph` CLI：execute → verify → self-heal → verify。
+- [x] 早期 `upgrade-graph` CLI：execute → verify → self-heal → verify。
 - [x] `tests/test_upgrade_graph.py`：覆盖 verify pass、verify fail → heal、heal budget 等路径。
 
 **不再放在 M3 的内容**
@@ -264,7 +264,7 @@
 - [x] LangGraph backbone 真实节点接入 v1：
   - `upgrade` CLI 已迁移到 full backbone，成为标准单依赖升级入口。
   - `upgrade-all` CLI 已迁移到 batch backbone v1。
-  - `upgrade-graph` 保留为兼容 alias，行为与 `upgrade` 同源。
+  - 已删除 `upgrade-graph` 兼容 alias，避免重复入口。
   - baseline / research / plan / execute / verify / heal / report 已作为 graph stage 串联。
 - [ ] LangGraph structured artifacts 后续：
   - 每个阶段通过 structured output 稳定产出 artifact。
@@ -385,7 +385,7 @@
 - [ ] 长 run 进度展示优化。
 - [ ] eval runner CI 用法文档。
 - [ ] 多依赖显式指定：例如 `upgrade <project> "mocha, nyc"`。
-- [ ] 清理兼容入口：稳定后移除或隐藏 `upgrade-graph` alias。
+- [x] 清理兼容入口：已移除 `upgrade-graph` alias。
 - [ ] README 与 ARCHITECTURE 根据新 milestone 同步精简。
 
 **验收标准**
