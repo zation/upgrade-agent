@@ -285,9 +285,11 @@
 - [ ] runtime state 后续：
   - [x] stage request / agent config 已携带当前正在升级的 dependency。
   - [x] stage request / agent config 已携带本轮允许修改的文件范围。
-  - [ ] runtime guardrail 使用上述 metadata 强制限制 mutation 范围。
+  - [x] runtime guardrail 已使用 `allowed_files` 限制 `write_file` / `edit_file` 范围。
+  - [ ] runtime guardrail 进一步约束命令型 mutation 的影响范围。
 - [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
+  - 文件 mutation 超出 `allowed_files` 时直接拦截。
 - [ ] tool guardrails 后续：
   - 检测 dirty target，避免覆盖用户已有改动。
   - 禁止危险 revert；只允许 revert 本次修改过的文件。

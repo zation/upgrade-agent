@@ -141,3 +141,62 @@ def test_baseline_guardrail_allows_file_mutation_after_green_test_baseline(
 
     assert result.ok
     assert (tmp_path / "src" / "new.js").read_text(encoding="utf-8") == "x"
+
+
+def test_allowed_files_guardrail_blocks_file_mutation_outside_scope(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("write_file", {"path": "src/new.js", "content": "x"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            system_prompt="",
+            max_iterations=3,
+            enforce_baseline_guardrail=True,
+            allowed_files=("package.json", "package-lock.json"),
+        ),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then write outside scope")
+
+    assert result.ok
+    assert not (tmp_path / "src" / "new.js").exists()
+    assert "outside the allowed mutation scope" in _last_tool_result_content(result)
+
+
+def test_allowed_files_guardrail_allows_file_mutation_inside_scope(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("write_file", {"path": "package.json", "content": "{}"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            system_prompt="",
+            max_iterations=3,
+            enforce_baseline_guardrail=True,
+            allowed_files=("package.json", "package-lock.json"),
+        ),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then write inside scope")
+
+    assert result.ok
+    assert (tmp_path / "package.json").read_text(encoding="utf-8") == "{}"

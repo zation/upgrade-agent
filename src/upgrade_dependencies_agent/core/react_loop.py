@@ -35,7 +35,12 @@ from typing import Any, Protocol, runtime_checkable
 
 from .context import ContextBudget, compact_history, needs_compaction
 from .llm_client import LLMClient, LLMResponse
-from .runtime_state import RuntimeState, baseline_guardrail, update_runtime_state
+from .runtime_state import (
+    RuntimeState,
+    baseline_guardrail,
+    mutation_scope_guardrail,
+    update_runtime_state,
+)
 from .trace import Tracer
 from .types import (
     AgentConfig,
@@ -254,6 +259,15 @@ class ReActLoop:
                     guardrail=blocked.metadata.get("guardrail"),
                 )
                 return blocked
+        blocked = mutation_scope_guardrail(call, self.config.allowed_files)
+        if blocked is not None:
+            tracer.event(
+                "tool_call",
+                name=call.name,
+                phase="guardrail_blocked",
+                guardrail=blocked.metadata.get("guardrail"),
+            )
+            return blocked
         try:
             res = tool.run(call.input, ctx)
         except Exception as e:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass
 
@@ -34,6 +35,34 @@ def baseline_guardrail(call: ToolUseBlock, state: RuntimeState) -> ToolResult | 
     return None
 
 
+def mutation_scope_guardrail(
+    call: ToolUseBlock,
+    allowed_files: tuple[str, ...],
+) -> ToolResult | None:
+    """Return a blocking result when a file mutation targets a disallowed path."""
+    if not allowed_files or call.name not in MUTATING_FS_TOOLS:
+        return None
+
+    requested = _normalize_relative_path(str(call.input.get("path", "")))
+    allowed = {_normalize_relative_path(path) for path in allowed_files}
+    if requested in allowed:
+        return None
+
+    return ToolResult(
+        output=(
+            "Tool call blocked by runtime guardrail: file mutation target "
+            f"'{requested}' is outside the allowed mutation scope. Allowed files: "
+            f"{', '.join(sorted(allowed))}."
+        ),
+        is_error=True,
+        metadata={
+            "guardrail": "allowed_files_scope",
+            "requested_path": requested,
+            "allowed_files": sorted(allowed),
+        },
+    )
+
+
 def update_runtime_state(call: ToolUseBlock, result: ToolResult, state: RuntimeState) -> None:
     """Update state from tool results after a call executes."""
     if call.name != "run_command":
@@ -59,3 +88,8 @@ def _looks_like_test_command(command: str) -> bool:
             command,
         )
     )
+
+
+def _normalize_relative_path(path: str) -> str:
+    normalized = posixpath.normpath(path.replace("\\", "/").strip())
+    return normalized.removeprefix("./")

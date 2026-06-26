@@ -50,7 +50,7 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 | Context engineering | `core/context.py` | ✅ v1 |
 | Observability | `core/trace.py`、`cli/ui.py` | ✅ |
 | Deterministic evals | `evals/runner.py` | ✅ v1 |
-| Structured output / runtime guardrails | 计划中，见 Roadmap M8 | ⏳ |
+| Structured output / runtime guardrails | `core/structured.py`、`core/runtime_state.py` | ✅ v1 |
 
 ## 快速开始
 
