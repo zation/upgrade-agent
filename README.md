@@ -25,9 +25,9 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
   依赖研究、GitHub releases 和 URL 抓取。
 - 路径安全：文件工具通过 `safe_resolve()` 限制在目标项目目录内。
 - 依赖升级 workflow：
-  - `upgrade`：单依赖 baseline → research → change → verify。
+  - `upgrade`：单依赖标准入口，使用 LangGraph backbone 执行 baseline → research → plan → execute → verify → report。
   - `upgrade-all`：直接依赖逐个升级，每个包单独验证。
-  - `upgrade-graph`：LangGraph execute → verify → self-heal → verify 薄编排。
+  - `upgrade-graph`：兼容 alias，后续会收敛到 `upgrade`。
 - 研究 workflow：`research-upgrade` 只读分析 breaking changes，并结合项目使用方式判断风险。
 - 补测试 workflow：
   - `analyze-coverage`：只读分析测试缺口。
@@ -44,8 +44,8 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 | ReAct | `core/react_loop.py` | ✅ |
 | Function Calling / Tool Use | `core/types.py`、`core/llm_client.py` | ✅ |
 | 多模型适配 | `core/llm_client.py` | ✅ |
-| LangGraph 编排 | `orchestrator/upgrade_graph.py` | ✅ v1 |
-| Self-healing / Reflection | `upgrade-graph` 的 verify → heal 边 | ✅ v1 |
+| LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
+| Self-healing / Reflection | `upgrade` / `upgrade-graph` 的 verify → heal 边 | ✅ v1 |
 | Research / RAG groundwork | `dependency_research`、`fetch_releases`、`fetch_url` | ✅ groundwork |
 | 只读研究子流程 | `research-upgrade` | ✅ |
 | Context engineering | `core/context.py` | ✅ v1 |
@@ -78,7 +78,6 @@ uv run upgrade-dependencies-agent analyze-coverage ../chai-like
 uv run upgrade-dependencies-agent generate-tests ../chai-like "cover uncovered public APIs"
 uv run upgrade-dependencies-agent research-upgrade ../chai-like "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade-graph ../chai-like "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade-all ../chai-like
 uv run upgrade-dependencies-agent ask ../chai-like "your task"
 ```
@@ -91,8 +90,8 @@ uv run upgrade-dependencies-agent ask ../chai-like "your task"
 | `analyze-coverage <project> [focus]` | 只读 | 分析测试和 coverage 信号，输出测试缺口。 |
 | `generate-tests <project> [focus]` | 完整工具 | 添加聚焦测试，并运行测试和 coverage 验证。 |
 | `research-upgrade <project> "<dep>"` | 只读 | 升级前研究 breaking changes。 |
-| `upgrade <project> "<dep>"` | 完整工具 | 升级一个依赖：baseline → change → verify。 |
-| `upgrade-graph <project> "<dep>"` | 完整工具 | 通过 LangGraph 执行升级、验证和一次自修复。 |
+| `upgrade <project> "<dep>"` | 完整工具 | 标准单依赖升级入口：baseline → research → plan → execute → verify → report。 |
+| `upgrade-graph <project> "<dep>"` | 完整工具 | 兼容 alias，行为与 `upgrade` 同源，后续可能移除。 |
 | `upgrade-all <project>` | 完整工具 | 逐个升级所有直接依赖，每个包单独验证。 |
 | `ask <project> "<task>"` | 默认完整工具 | 执行任意任务；可加 `--read-only` 禁用写入和 shell。 |
 

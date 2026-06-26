@@ -22,8 +22,8 @@
 | 工具协议 | `core/types.py` 的 `Tool` / `ToolImpl` | ✅ |
 | 文件路径隔离 | `tools/_common.py` 的 `safe_resolve()` | ✅ |
 | npm / changelog research | `tools/npm.py`、`tools/changelog.py` | ✅ v1 |
-| LangGraph 编排 | `orchestrator/upgrade_graph.py` | ✅ v1 |
-| 自修复边 | `upgrade-graph` 的 verify → heal | ✅ v1 |
+| LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
+| 自修复边 | `upgrade` / `upgrade-graph` 的 verify → heal | ✅ v1 |
 | 确定性 eval | `evals/runner.py` | ✅ v1 |
 | 结构化输出与 runtime guardrails | Roadmap M8 | ⏳ |
 | 深度 RAG | Roadmap M10 | ⏳ |
@@ -109,24 +109,30 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 | `analyze-coverage` | 只读分析测试缺口。 |
 | `generate-tests` | 添加聚焦测试并验证。 |
 | `research-upgrade` | 只读研究一个依赖升级。 |
-| `upgrade` | 单依赖升级闭环。 |
+| `upgrade` | 标准单依赖升级入口，使用 LangGraph backbone。 |
 | `upgrade-all` | 所有直接依赖逐个升级。 |
-| `upgrade-graph` | LangGraph execute → verify → heal 薄编排。 |
+| `upgrade-graph` | 兼容 alias，行为与 `upgrade` 同源，后续可能移除。 |
 | `ask` | 任意任务，可用 `--read-only` 限制权限。 |
 
 ## LangGraph 编排
 
-`orchestrator/upgrade_graph.py` 当前是薄编排，不是完整多阶段 state graph。
+`orchestrator/upgrade_backbone.py` 和 `orchestrator/upgrade_workflow.py`
+当前承载单依赖升级的 LangGraph backbone；`orchestrator/upgrade_graph.py`
+保留旧 thin graph 实现，主要用于兼容和对照测试。
 
 已实现：
 
+- baseline 节点建立升级前测试基线。
+- research 节点只读研究 breaking changes。
+- plan 节点生成最小升级计划。
 - execute 节点执行升级。
 - verify 节点独立验证结果。
 - verify 失败时进入 heal 节点。
+- report 节点汇总最终结果。
 - heal 次数受 `max_heal_attempts` 限制。
-- 单元测试覆盖通过、失败后修复、超过修复预算等路径。
+- 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
 
-未实现的完整 analyze → research → plan → execute → verify → report graph 已移动到 Roadmap M8。
+后续要把 verify 的自然语言 verdict 判断替换为 structured output，见 Roadmap M8。
 
 ## Research 能力
 
@@ -168,7 +174,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 ## 关键取舍
 
 - **手写 loop，不用 agent framework 替代核心**：这是学习目标，也是核心可解释性来源。
-- **LangGraph 只做编排**：用于展示 state machine 与 self-heal，不替代 ReAct loop。
+- **LangGraph 只做编排**：用于 state machine 与 self-heal，不替代 ReAct loop。
 - **失败测试不是异常**：测试失败是模型修复问题所需的观察信号。
 - **`edit_file` 使用精确唯一匹配**：避免模型重写整文件或误改多个位置。
 - **先做 deterministic eval**：优先验证客观 outcome 和 trajectory，再考虑 LLM judge。
@@ -176,8 +182,8 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 ## 当前路线图摘要
 
 - **M1-M6 ✅**：core、单依赖升级、批量/graph v1、研究工具 v1、eval v1、补测试 v1。
-- **M7 ⏳**：Prompt / Skill 质量。
-- **M8 ⏳**：结构化状态与 runtime guardrails。
+- **M7 ✅**：Prompt / Skill 质量 v1。
+- **M8 🚧**：LangGraph backbone、结构化状态与 runtime guardrails。
 - **M9 ⏳**：成本与上下文优化。
 - **M10 ⏳**：Research / RAG 深化。
 - **M11 ⏳**：CLI / UX 与集成体验。
