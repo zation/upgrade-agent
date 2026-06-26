@@ -87,6 +87,18 @@ uv run upgrade-dependencies-agent ask       ../chai-like "any free-form task"
 
 Add `--verbose` for full model output, `--model` to override the provider default.
 
+## Evals
+
+Run deterministic eval cases from an isolated copy of the target project:
+
+```bash
+uv run python -m evals.runner evals/cases/chai-like-mocha-upgrade.json
+```
+
+The first eval harness does not use an LLM judge. It runs the case command, then
+checks objective postconditions such as `package.json` dependency versions,
+test-command success, and whether the changed paths stay inside an allowed set.
+
 ## Project layout
 
 ```

@@ -1,0 +1,32 @@
+{
+  "name": "chai-like mocha upgrade",
+  "target": "../chai-like",
+  "command": [
+    "uv",
+    "run",
+    "upgrade-dependencies-agent",
+    "upgrade",
+    "{workdir}",
+    "mocha 4 -> 11"
+  ],
+  "checks": [
+    {
+      "type": "package_json_version",
+      "dependency": "mocha",
+      "section": "devDependencies",
+      "specifier": ">=11.0.0"
+    },
+    {
+      "type": "command",
+      "command": "npm test",
+      "timeout": 300
+    },
+    {
+      "type": "git_diff",
+      "allowed_paths": [
+        "package.json",
+        "package-lock.json"
+      ]
+    }
+  ]
+}

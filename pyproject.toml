@@ -66,6 +66,7 @@ known-first-party = ["upgrade_dependencies_agent"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.12"
