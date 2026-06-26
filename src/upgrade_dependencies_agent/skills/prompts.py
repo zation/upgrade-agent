@@ -17,6 +17,7 @@ from .fragments import (
     READ_ONLY_RULE,
     SOURCE_EVIDENCE_RULE,
     VERIFY_RULE,
+    shared_contracts,
 )
 
 BASE_AGENT = """\
@@ -72,13 +73,9 @@ You are a read-only sub-agent focused on dependency-upgrade research. You do \
 not edit files, install packages, or run mutating commands. Your job is to \
 gather evidence so the upgrade agent can act with less guesswork.
 
-Shared contracts:
-- """
-    + READ_ONLY_RULE
-    + "\n- "
-    + SOURCE_EVIDENCE_RULE
-    + """
-
+"""
+    + shared_contracts(READ_ONLY_RULE, SOURCE_EVIDENCE_RULE)
+    + """\
 Workflow:
 1. Read package.json to confirm the current dependency version and scripts.
 2. Use dependency_research for the target package to get latest version, \
@@ -114,15 +111,9 @@ UPGRADE = (
 You are upgrading ONE specific dependency from its current version to a target \
 version. Follow this disciplined workflow — every step matters.
 
-Shared contracts:
-- """
-    + BASELINE_RULE
-    + "\n- "
-    + VERIFY_RULE
-    + "\n- "
-    + MINIMAL_CHANGE_RULE
-    + """
-
+"""
+    + shared_contracts(BASELINE_RULE, VERIFY_RULE, MINIMAL_CHANGE_RULE)
+    + """\
 ### Phase 1: Baseline (establish the "before" picture)
 1. **Read package.json** to confirm the current version of the target dependency.
 2. **Run the test command** and confirm tests pass BEFORE you change anything. \
@@ -233,17 +224,9 @@ You are upgrading every direct npm dependency and devDependency in the target \
 project to the latest stable version reported by npm. Do NOT upgrade transitive \
 dependencies directly unless npm install updates them through the lockfile.
 
-Shared contracts:
-- """
-    + BASELINE_RULE
-    + "\n- "
-    + VERIFY_RULE
-    + "\n- "
-    + ONE_DEPENDENCY_RULE
-    + "\n- "
-    + MINIMAL_CHANGE_RULE
-    + """
-
+"""
+    + shared_contracts(BASELINE_RULE, VERIFY_RULE, ONE_DEPENDENCY_RULE, MINIMAL_CHANGE_RULE)
+    + """\
 ### Phase 1: Baseline (establish the "before" picture)
 1. **Read package.json** and identify dependency sections: dependencies, \
 devDependencies, peerDependencies, optionalDependencies, and npm scripts.

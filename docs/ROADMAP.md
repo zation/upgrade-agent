@@ -213,7 +213,7 @@
 - [x] 拆分 prompt 层级 v1：
   - 重复规则已提取为共享片段，例如 baseline rule、verify rule、minimal-change rule、
     read-only rule、source-evidence rule、test-style rule。
-  - task prompt 已开始显式引用共享 contracts。
+  - task prompt 已通过统一 helper 显式引用共享 contracts。
 - [ ] 继续瘦身 prompt：
   - `BASE_AGENT` 只保留全局原则。
   - task prompt 只描述本任务策略、输出格式和少量特殊规则。

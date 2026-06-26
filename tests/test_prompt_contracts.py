@@ -16,6 +16,7 @@ from upgrade_dependencies_agent.skills.fragments import (
     SOURCE_EVIDENCE_RULE,
     TEST_STYLE_RULE,
     VERIFY_RULE,
+    shared_contracts,
 )
 
 
@@ -43,3 +44,12 @@ def test_generate_tests_prompt_keeps_style_baseline_and_verify_contracts() -> No
     assert TEST_STYLE_RULE in ADD_TESTS_GENERATE
     assert BASELINE_RULE in ADD_TESTS_GENERATE
     assert VERIFY_RULE in ADD_TESTS_GENERATE
+
+
+def test_shared_contracts_render_with_consistent_heading_and_bullets() -> None:
+    section = shared_contracts(BASELINE_RULE, VERIFY_RULE)
+
+    assert section.startswith("Shared contracts:\n")
+    assert f"- {BASELINE_RULE}" in section
+    assert f"- {VERIFY_RULE}" in section
+    assert section.endswith("\n\n")

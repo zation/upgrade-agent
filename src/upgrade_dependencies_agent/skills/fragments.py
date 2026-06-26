@@ -35,3 +35,9 @@ TEST_STYLE_RULE = (
     "Follow the existing test style: naming, assertion library, import style, "
     "fixtures, setup helpers, and nearest appropriate test location."
 )
+
+
+def shared_contracts(*rules: str) -> str:
+    """Render a standard shared-contract section for task prompts."""
+    bullets = "\n".join(f"- {rule}" for rule in rules)
+    return f"Shared contracts:\n{bullets}\n\n"
