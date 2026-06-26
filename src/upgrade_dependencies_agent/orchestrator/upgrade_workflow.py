@@ -75,11 +75,7 @@ def run_upgrade_backbone_workflow(
         )
         return {
             **state,
-            "research": ResearchBrief(
-                package=_dependency_name(target),
-                target_version=_target_version(target),
-                relevant_risks=[result.final_text],
-            ),
+            "research": _research_from_result(result, target),
         }
 
     def plan(state: UpgradeGraphState) -> UpgradeGraphState:
@@ -484,7 +480,11 @@ def _research_task(target: str) -> str:
     return (
         f"Research this dependency upgrade without editing files: {target}.\n\n"
         "Use package metadata, release/changelog sources, and project usage search "
-        "to identify relevant breaking changes. End with the required verdict line."
+        "to identify relevant breaking changes. Return exactly one JSON object "
+        "with this shape: "
+        '{"package": "mocha", "current_version": "4.0.0", '
+        '"target_version": "11.0.0", "sources": ["https://..."], '
+        '"relevant_risks": ["risk summary"]}.'
     )
 
 
@@ -636,6 +636,17 @@ def _baseline_from_result(result: LoopResult) -> BaselineState:
             green=_result_passed(result),
             command="npm test",
             summary=result.final_text,
+        )
+
+
+def _research_from_result(result: LoopResult, target: str) -> ResearchBrief:
+    try:
+        return parse_structured_text(result.final_text, ResearchBrief)
+    except StructuredParseError:
+        return ResearchBrief(
+            package=_dependency_name(target),
+            target_version=_target_version(target),
+            relevant_risks=[result.final_text],
         )
 
 

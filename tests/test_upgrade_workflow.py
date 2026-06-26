@@ -135,6 +135,37 @@ def test_upgrade_workflow_parses_structured_baseline_state() -> None:
     assert result.state["baseline"].summary == "28 passing"
 
 
+def test_upgrade_workflow_parses_structured_research_brief() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "research":
+            return _result(
+                """
+                {
+                  "package": "mocha",
+                  "current_version": "4.0.0",
+                  "target_version": "11.0.0",
+                  "sources": ["https://example.test/mocha"],
+                  "relevant_risks": ["Node version requirement changed"]
+                }
+                """
+            )
+        if request.stage == "verify":
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert result.state["research"] is not None
+    assert result.state["research"].package == "mocha"
+    assert result.state["research"].target_version == "11.0.0"
+    assert result.state["research"].sources == ["https://example.test/mocha"]
+    assert result.state["research"].relevant_risks == ["Node version requirement changed"]
+
+
 def test_upgrade_workflow_report_collects_changed_files() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         if request.stage == "verify":
