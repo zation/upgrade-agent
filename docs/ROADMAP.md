@@ -214,6 +214,8 @@
   - 重复规则已提取为共享片段，例如 baseline rule、verify rule、minimal-change rule、
     read-only rule、source-evidence rule、test-style rule。
   - task prompt 已通过统一 helper 显式引用共享 contracts。
+  - `BREAKING_CHANGE_RESEARCHER` 和 `UPGRADE` 已使用结构化 renderer，并复用 breaking-change
+    research workflow section。
 - [ ] 继续瘦身 prompt：
   - 已删除 `upgrade` / `upgrade-all` 中被共享 contracts 覆盖的重复 legacy rules。
   - `BASE_AGENT` 已删除工具清单，只保留全局原则。

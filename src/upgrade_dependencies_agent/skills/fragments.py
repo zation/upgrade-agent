@@ -36,6 +36,17 @@ TEST_STYLE_RULE = (
     "fixtures, setup helpers, and nearest appropriate test location."
 )
 
+BREAKING_CHANGE_RESEARCH_WORKFLOW = """\
+1. Read package.json to confirm the current dependency version and scripts.
+2. Use dependency_research for the target package to get latest version, \
+major-version span, repository/homepage, and candidate changelog sources.
+3. Use npm_releases to inspect recent versions and identify major boundaries.
+4. Read release notes or changelog sources with fetch_releases/fetch_url. Focus \
+on breaking changes, Node.js minimum version, ESM/CJS changes, peer dependency \
+changes, CLI/config changes, and removed APIs.
+5. Search the target project for actual usage of the dependency so the report \
+distinguishes relevant project risks from generic upstream changes."""
+
 
 def shared_contracts(*rules: str) -> str:
     """Render a standard shared-contract section for task prompts."""

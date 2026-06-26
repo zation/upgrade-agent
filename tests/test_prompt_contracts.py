@@ -11,6 +11,7 @@ from upgrade_dependencies_agent.skills import (
 )
 from upgrade_dependencies_agent.skills.fragments import (
     BASELINE_RULE,
+    BREAKING_CHANGE_RESEARCH_WORKFLOW,
     MINIMAL_CHANGE_RULE,
     ONE_DEPENDENCY_RULE,
     READ_ONLY_RULE,
@@ -71,3 +72,8 @@ def test_upgrade_prompts_do_not_repeat_contract_rules_in_legacy_rules_section() 
 def test_base_agent_keeps_global_principles_not_tool_inventory() -> None:
     assert "Core operating principles:" in BASE_AGENT
     assert "You have tools for" not in BASE_AGENT
+
+
+def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:
+    assert BREAKING_CHANGE_RESEARCH_WORKFLOW in BREAKING_CHANGE_RESEARCHER
+    assert BREAKING_CHANGE_RESEARCH_WORKFLOW in UPGRADE
