@@ -104,3 +104,39 @@ def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
+
+
+def test_stage_loop_runner_passes_runtime_scope_to_agent_config(monkeypatch):
+    calls: dict[str, object] = {}
+
+    class FakeLoop:
+        def __init__(self, *, client, config, tools, workdir, callbacks):
+            calls["config"] = config
+
+        def run(self, task):
+            calls["task"] = task
+            return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    runner = cli._make_stage_loop_runner(
+        client=object(),
+        model="test-model",
+        max_iterations=3,
+        workdir="/tmp/project",
+        ui=SimpleNamespace(),
+    )
+
+    runner(
+        cli.StageLoopRequest(
+            stage="execute",
+            system_prompt="prompt",
+            task="upgrade mocha",
+            enforce_baseline_guardrail=True,
+            current_dependency="mocha",
+            allowed_files=("package.json", "package-lock.json"),
+        )
+    )
+
+    config = calls["config"]
+    assert config.current_dependency == "mocha"
+    assert config.allowed_files == ("package.json", "package-lock.json")

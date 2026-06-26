@@ -130,6 +130,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - verify 失败时进入 heal 节点。
 - report 节点汇总最终结果。
 - heal 次数受 `max_heal_attempts` 限制。
+- mutation stage 会把当前 dependency 和允许修改文件传入 runtime config，供后续 guardrails 使用。
 - 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
 
 后续要把 verify 的自然语言 verdict 判断替换为 structured output，见 Roadmap M8。

@@ -30,6 +30,8 @@ class StageLoopRequest:
     task: str
     read_only: bool = False
     enforce_baseline_guardrail: bool = False
+    current_dependency: str | None = None
+    allowed_files: tuple[str, ...] = ()
 
 
 StageLoopRunner = Callable[[StageLoopRequest], LoopResult]
@@ -104,6 +106,8 @@ def run_upgrade_backbone_workflow(
                 system_prompt=UPGRADE,
                 task=_execute_task(target, state),
                 enforce_baseline_guardrail=True,
+                current_dependency=state.get("current_dependency"),
+                allowed_files=_allowed_files_from_state(state),
             )
         )
         return {**state, "execute_result": result, "final_result": result}
@@ -130,6 +134,8 @@ def run_upgrade_backbone_workflow(
                 system_prompt=UPGRADE,
                 task=_heal_task(state),
                 enforce_baseline_guardrail=True,
+                current_dependency=state.get("current_dependency"),
+                allowed_files=_allowed_files_from_state(state),
             )
         )
         return {**state, "heal_result": result, "final_result": result}
@@ -243,6 +249,8 @@ def run_upgrade_all_backbone_workflow(
                         package_state,
                     ),
                     enforce_baseline_guardrail=True,
+                    current_dependency=item.name,
+                    allowed_files=_allowed_files_from_state(package_state),
                 )
             )
             verify_result = run_loop(
@@ -272,6 +280,7 @@ def run_upgrade_all_backbone_workflow(
         return {
             **current_state,
             "queue": queue,
+            "current_dependency": target,
             "verify_result": last_result,
             "final_result": last_result,
         }
@@ -298,6 +307,8 @@ def run_upgrade_all_backbone_workflow(
                 system_prompt=UPGRADE_ALL,
                 task=_batch_heal_task(state),
                 enforce_baseline_guardrail=True,
+                current_dependency=state.get("current_dependency"),
+                allowed_files=_allowed_files_from_state(state),
             )
         )
         return {**state, "heal_result": result, "final_result": result}
@@ -509,6 +520,11 @@ def _queue_from_result(result: LoopResult) -> UpgradeQueue:
         return parse_structured_text(result.final_text, UpgradeQueue)
     except StructuredParseError:
         return UpgradeQueue()
+
+
+def _allowed_files_from_state(state: UpgradeGraphState) -> tuple[str, ...]:
+    plan = state.get("plan")
+    return tuple(plan.allowed_files) if plan else ()
 
 
 def _dependency_name(target: str) -> str:

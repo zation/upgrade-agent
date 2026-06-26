@@ -183,6 +183,9 @@ class AgentConfig(BaseModel):
     trace: bool = True
     # When True, mutating tool calls are blocked until a green test baseline is observed.
     enforce_baseline_guardrail: bool = False
+    # Runtime metadata supplied by graph stages; guardrails can use this to scope mutations.
+    current_dependency: str | None = None
+    allowed_files: tuple[str, ...] = ()
 
 
 # --------------------------------------------------------------------------- #

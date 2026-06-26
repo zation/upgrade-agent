@@ -283,8 +283,9 @@
   - baseline 是否已跑。
   - baseline 是否 green。
 - [ ] runtime state 后续：
-  - 当前正在升级哪个 dependency。
-  - 本轮允许修改的文件范围。
+  - [x] stage request / agent config 已携带当前正在升级的 dependency。
+  - [x] stage request / agent config 已携带本轮允许修改的文件范围。
+  - [ ] runtime guardrail 使用上述 metadata 强制限制 mutation 范围。
 - [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
 - [ ] tool guardrails 后续：
