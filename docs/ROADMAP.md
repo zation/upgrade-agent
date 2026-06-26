@@ -216,7 +216,7 @@
   - task prompt 已通过统一 helper 显式引用共享 contracts。
 - [ ] 继续瘦身 prompt：
   - 已删除 `upgrade` / `upgrade-all` 中被共享 contracts 覆盖的重复 legacy rules。
-  - `BASE_AGENT` 只保留全局原则。
+  - `BASE_AGENT` 已删除工具清单，只保留全局原则。
   - task prompt 只描述本任务策略、输出格式和少量特殊规则。
 - [ ] 清理 prompt 与 runtime 的职责边界：
   - prompt 保留“为什么要做”和异常时如何报告。

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from upgrade_dependencies_agent.skills import (
     ADD_TESTS_GENERATE,
+    BASE_AGENT,
     BREAKING_CHANGE_RESEARCHER,
     UPGRADE,
     UPGRADE_ALL,
@@ -65,3 +66,8 @@ def test_upgrade_prompts_do_not_repeat_contract_rules_in_legacy_rules_section() 
     for rule in duplicated_legacy_rules:
         assert rule not in UPGRADE
         assert rule not in UPGRADE_ALL
+
+
+def test_base_agent_keeps_global_principles_not_tool_inventory() -> None:
+    assert "Core operating principles:" in BASE_AGENT
+    assert "You have tools for" not in BASE_AGENT

@@ -35,11 +35,7 @@ actual output. Test failures are information, not setbacks; diagnose them.
 - One thing at a time. Do not batch unrelated changes. Finish and verify one \
 step before starting the next.
 - Report clearly. When you finish, summarize what changed, what you verified, \
-and anything that still needs human attention.
-
-You have tools for reading/writing/editing files, searching, running shell \
-commands, checking git state, querying the npm registry, and fetching web \
-pages (changelogs, release notes, migration guides). Use them."""
+and anything that still needs human attention."""
 
 
 ANALYZE = (
