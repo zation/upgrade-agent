@@ -129,18 +129,12 @@ def run_upgrade_backbone_workflow(
 
     def report(state: UpgradeGraphState) -> UpgradeGraphState:
         verification = state.get("verification")
-        ok = bool(verification and verification.ok)
-        summary = verification.summary if verification else "verification did not run"
         changed_files = _collect_changed_files(state, collect_changed_files)
+        report_artifact = _single_agent_report(changed_files, verification)
         return {
             **state,
             "changed_files": changed_files,
-            "report": AgentReport(
-                ok=ok,
-                summary=summary,
-                changed_files=changed_files,
-                remaining_risks=[] if ok else ["upgrade verification failed"],
-            ),
+            "report": report_artifact,
         }
 
     runner = UpgradeBackboneRunner(
@@ -670,12 +664,39 @@ def _batch_agent_report(
         for record in package_results
         if record.status == "failed"
     ]
+    failed_package_names = [record.name for record in package_results if record.status == "failed"]
+    failure_reason = None
+    if not ok:
+        failure_reason = "package_failed" if failed_package_names else "verification_failed"
     remaining_risks = [] if ok else ["batch upgrade verification failed", *failed_packages]
+    recovery_suggestions = [
+        f"Review or revert failed package: {package_name}" for package_name in failed_package_names
+    ]
+    if not ok and not recovery_suggestions:
+        recovery_suggestions = [f"Inspect verification failure: {verification_summary}"]
     return AgentReport(
         ok=ok,
         summary=summary,
         changed_files=changed_files,
         remaining_risks=remaining_risks,
+        failure_reason=failure_reason,
+        recovery_suggestions=recovery_suggestions,
+    )
+
+
+def _single_agent_report(
+    changed_files: list[str],
+    verification: VerificationResult | None,
+) -> AgentReport:
+    ok = bool(verification and verification.ok)
+    summary = verification.summary if verification else "verification did not run"
+    return AgentReport(
+        ok=ok,
+        summary=summary,
+        changed_files=changed_files,
+        remaining_risks=[] if ok else ["upgrade verification failed"],
+        failure_reason=None if ok else "verification_failed",
+        recovery_suggestions=[] if ok else [f"Inspect verification failure: {summary}"],
     )
 
 

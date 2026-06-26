@@ -398,6 +398,12 @@ def _agent_report_shape_error(value: Any) -> str | None:
         return "report.changed_files must be a list of strings"
     if not _is_string_list(value.get("remaining_risks")):
         return "report.remaining_risks must be a list of strings"
+    failure_reason = value.get("failure_reason")
+    if failure_reason is not None and not isinstance(failure_reason, str):
+        return "report.failure_reason must be a string or null"
+    recovery_suggestions = value.get("recovery_suggestions")
+    if recovery_suggestions is not None and not _is_string_list(recovery_suggestions):
+        return "report.recovery_suggestions must be a list of strings"
     return None
 
 

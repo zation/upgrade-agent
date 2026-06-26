@@ -278,7 +278,7 @@
   - [x] research 阶段优先解析 JSON `ResearchBrief`，保留 legacy text fallback。
   - [x] plan 阶段稳定产出 `UpgradePlan`，并优先使用 structured research 的目标版本。
   - [x] report 阶段写入批量 package summary，并把 failed package 写入 `remaining_risks`。
-  - [ ] report 阶段继续完善失败原因分类和可恢复建议。
+  - [x] report 阶段写入 `failure_reason` 和 `recovery_suggestions`。
   - [x] P1：将真实 changed files 采集前移到 workflow/report node，并写入 graph state。
   - [x] P2a：为 `upgrade-all` 增加 package-level result state。
   - [x] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。
@@ -305,6 +305,7 @@
   - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
 - [x] eval runner 已增加 `structured_report` check：
   - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
+  - 校验可选 `failure_reason` / `recovery_suggestions` 字段类型。
   - `upgrade` / `upgrade-all` 支持 `--report-json` 输出结构化 `AgentReport`。
   - 真实 upgrade eval case 已接入 `structured_report` check。
 

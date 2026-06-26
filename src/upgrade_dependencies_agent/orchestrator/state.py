@@ -98,6 +98,8 @@ class AgentReport(BaseModel):
     summary: str
     changed_files: list[str] = Field(default_factory=list)
     remaining_risks: list[str] = Field(default_factory=list)
+    failure_reason: str | None = None
+    recovery_suggestions: list[str] = Field(default_factory=list)
 
 
 class UpgradeGraphState(TypedDict, total=False):

@@ -98,6 +98,28 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
     assert "Self-heal" in heal_request.task
 
 
+def test_upgrade_workflow_report_classifies_failed_verification() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "verify":
+            return _result(
+                '{"ok": false, "command": "npm test", "summary": "1 failing in mocha reporter"}'
+            )
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=0,
+        run_loop=run_loop,
+    )
+
+    assert result.report is not None
+    assert result.report.ok is False
+    assert result.report.failure_reason == "verification_failed"
+    assert "Inspect verification failure: 1 failing in mocha reporter" in (
+        result.report.recovery_suggestions
+    )
+
+
 def test_upgrade_workflow_keeps_legacy_verdict_fallback() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         if request.stage == "verify":
@@ -397,7 +419,9 @@ def test_upgrade_all_workflow_report_summarizes_package_results_and_failures() -
     assert result.report.ok is False
     assert "mocha: done" in result.report.summary
     assert "chai: failed" in result.report.summary
+    assert result.report.failure_reason == "package_failed"
     assert "chai: chai ESM import failed" in result.report.remaining_risks
+    assert "Review or revert failed package: chai" in result.report.recovery_suggestions
 
 
 def test_upgrade_all_workflow_report_collects_changed_files() -> None:

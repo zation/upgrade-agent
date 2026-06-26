@@ -673,3 +673,47 @@ def test_structured_report_check_reports_unexpected_changed_files(tmp_path: Path
     assert result.failure_reason == "structured_report_failed"
     assert result.checks[0].name == "structured_report:report.json"
     assert "unexpected changed files" in result.checks[0].message
+
+
+def test_structured_report_check_validates_optional_failure_fields(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "structured report optional fields",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "import json, pathlib; "
+                        "pathlib.Path('report.json').write_text(json.dumps({"
+                        "'ok': False, "
+                        "'summary': 'upgrade failed', "
+                        "'changed_files': [], "
+                        "'remaining_risks': ['tests failed'], "
+                        "'failure_reason': 42, "
+                        "'recovery_suggestions': ['inspect test output']"
+                        "}))"
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "structured_report",
+                        "path": "report.json",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "structured_report_failed"
+    assert "report.failure_reason must be a string or null" in result.checks[0].message
