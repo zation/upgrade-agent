@@ -114,6 +114,25 @@ def test_upgrade_workflow_keeps_legacy_verdict_fallback() -> None:
     assert result.state["verification"].ok is True
 
 
+def test_upgrade_workflow_report_collects_changed_files() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "verify":
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=1,
+        run_loop=run_loop,
+        collect_changed_files=lambda: ["package-lock.json", "package.json"],
+    )
+
+    assert result.ok
+    assert result.report is not None
+    assert result.report.changed_files == ["package-lock.json", "package.json"]
+    assert result.state["changed_files"] == ["package-lock.json", "package.json"]
+
+
 def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     requests: list[StageLoopRequest] = []
 
@@ -226,3 +245,26 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     assert requests[5].current_dependency == "all direct dependencies"
     assert requests[5].allowed_files == ("package.json", "package-lock.json")
     assert "batch upgrade" in requests[5].task
+
+
+def test_upgrade_all_workflow_report_collects_changed_files() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "queue":
+            return _result(
+                '{"packages": [{"name": "mocha", "current_version": "4.0.0", '
+                '"target_version": "11.0.0", "dependency_type": "devDependency"}]}'
+            )
+        if request.stage in {"verify", "verify_package"}:
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
+        return _result("stage complete")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=1,
+        run_loop=run_loop,
+        collect_changed_files=lambda: ["package.json"],
+    )
+
+    assert result.ok
+    assert result.report is not None
+    assert result.report.changed_files == ["package.json"]
+    assert result.state["changed_files"] == ["package.json"]

@@ -243,6 +243,7 @@ def _run_upgrade_backbone_cli(
             workdir=workdir,
             ui=ui,
         ),
+        collect_changed_files=lambda: _changed_worktree_paths(workdir),
     )
     return result
 
@@ -265,6 +266,7 @@ def _run_upgrade_all_backbone_cli(
             workdir=workdir,
             ui=ui,
         ),
+        collect_changed_files=lambda: _changed_worktree_paths(workdir),
     )
     return result
 

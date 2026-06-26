@@ -35,6 +35,7 @@ class StageLoopRequest:
 
 
 StageLoopRunner = Callable[[StageLoopRequest], LoopResult]
+ChangedFilesCollector = Callable[[], list[str] | None]
 
 
 def run_upgrade_backbone_workflow(
@@ -42,6 +43,7 @@ def run_upgrade_backbone_workflow(
     *,
     max_heal_attempts: int,
     run_loop: StageLoopRunner,
+    collect_changed_files: ChangedFilesCollector | None = None,
 ) -> UpgradeBackboneResult:
     """Run the concrete upgrade workflow using caller-provided ReAct loop execution."""
 
@@ -144,12 +146,14 @@ def run_upgrade_backbone_workflow(
         verification = state.get("verification")
         ok = bool(verification and verification.ok)
         summary = verification.summary if verification else "verification did not run"
+        changed_files = _collect_changed_files(state, collect_changed_files)
         return {
             **state,
+            "changed_files": changed_files,
             "report": AgentReport(
                 ok=ok,
                 summary=summary,
-                changed_files=state.get("changed_files", []),
+                changed_files=changed_files,
                 remaining_risks=[] if ok else ["upgrade verification failed"],
             ),
         }
@@ -171,6 +175,7 @@ def run_upgrade_all_backbone_workflow(
     *,
     max_heal_attempts: int,
     run_loop: StageLoopRunner,
+    collect_changed_files: ChangedFilesCollector | None = None,
 ) -> UpgradeBackboneResult:
     """Run the concrete batch-upgrade workflow using the full graph backbone."""
     target = "all direct dependencies"
@@ -317,12 +322,14 @@ def run_upgrade_all_backbone_workflow(
         verification = state.get("verification")
         ok = bool(verification and verification.ok)
         summary = verification.summary if verification else "verification did not run"
+        changed_files = _collect_changed_files(state, collect_changed_files)
         return {
             **state,
+            "changed_files": changed_files,
             "report": AgentReport(
                 ok=ok,
                 summary=summary,
-                changed_files=state.get("changed_files", []),
+                changed_files=changed_files,
                 remaining_risks=[] if ok else ["batch upgrade verification failed"],
             ),
         }
@@ -525,6 +532,16 @@ def _queue_from_result(result: LoopResult) -> UpgradeQueue:
 def _allowed_files_from_state(state: UpgradeGraphState) -> tuple[str, ...]:
     plan = state.get("plan")
     return tuple(plan.allowed_files) if plan else ()
+
+
+def _collect_changed_files(
+    state: UpgradeGraphState,
+    collect_changed_files: ChangedFilesCollector | None,
+) -> list[str]:
+    if collect_changed_files is None:
+        return state.get("changed_files", [])
+    changed_files = collect_changed_files()
+    return changed_files if changed_files is not None else state.get("changed_files", [])
 
 
 def _dependency_name(target: str) -> str:

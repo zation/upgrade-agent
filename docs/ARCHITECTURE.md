@@ -134,7 +134,8 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - runtime guardrail 会拒绝超出 `allowed_files` 的显式文件写入或编辑。
 - runtime guardrail 会拒绝危险全局 revert 命令。
 - CLI stage runner 会在第一次 mutation stage 前检查 target worktree，已有改动时停止。
-- `--report-json` 输出的 `changed_files` 来自目标 git worktree 的实际状态。
+- workflow report node 会采集目标 git worktree 的实际 changed files，并写入 graph state / `AgentReport`。
+- `--report-json` 输出上述结构化 `AgentReport`。
 - 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
 
 后续要把 verify 的自然语言 verdict 判断替换为 structured output，见 Roadmap M8。

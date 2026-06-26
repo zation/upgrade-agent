@@ -275,7 +275,8 @@
   - `upgrade-all` execute 阶段基于结构化 package queue 逐包派发执行与验证，并回写 package 状态。
 - [ ] LangGraph structured artifacts 后续：
   - baseline / research / plan / report 阶段通过 structured output 稳定产出 artifact。
-  - 将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边和 package-level state。
+  - [x] P1：将真实 changed files 采集前移到 workflow/report node，并写入 graph state。
+  - P2：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边和 package-level state。
 - [x] `core/structured.py` v1：从模型文本中提取 JSON object，并用 Pydantic schema 校验。
 - [ ] provider 原生 structured output：
   - 封装 Claude / OpenAI-compatible 的 JSON / response-format 参数。
@@ -299,7 +300,7 @@
   - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
 - [x] eval runner 已增加 `structured_report` check：
   - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
-  - `upgrade` / `upgrade-all` 支持 `--report-json` 输出结构化 `AgentReport`，并用目标 git worktree 状态填充 `changed_files`。
+  - `upgrade` / `upgrade-all` 支持 `--report-json` 输出结构化 `AgentReport`。
   - 真实 upgrade eval case 已接入 `structured_report` check。
 
 **验收标准**

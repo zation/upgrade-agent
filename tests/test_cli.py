@@ -71,10 +71,11 @@ def test_upgrade_graph_cli_is_removed(tmp_path):
 def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
     calls: dict[str, object] = {}
 
-    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop):
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop, collect_changed_files):
         calls["target"] = target
         calls["max_heal_attempts"] = max_heal_attempts
         calls["run_loop"] = run_loop
+        calls["collect_changed_files"] = collect_changed_files
         return SimpleNamespace(ok=True)
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
@@ -87,12 +88,13 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
     assert calls["target"] == "mocha 4 -> 11"
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
+    assert callable(calls["collect_changed_files"])
 
 
 def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
     report_path = tmp_path / "report.json"
 
-    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop):
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop, collect_changed_files):
         return SimpleNamespace(
             ok=True,
             report=SimpleNamespace(
@@ -127,9 +129,10 @@ def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
 def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     calls: dict[str, object] = {}
 
-    def fake_workflow(*, max_heal_attempts: int, run_loop):
+    def fake_workflow(*, max_heal_attempts: int, run_loop, collect_changed_files):
         calls["max_heal_attempts"] = max_heal_attempts
         calls["run_loop"] = run_loop
+        calls["collect_changed_files"] = collect_changed_files
         return SimpleNamespace(ok=True)
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
@@ -141,12 +144,13 @@ def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
+    assert callable(calls["collect_changed_files"])
 
 
 def test_upgrade_all_cli_writes_structured_report(monkeypatch, tmp_path):
     report_path = tmp_path / "reports" / "upgrade-all.json"
 
-    def fake_workflow(*, max_heal_attempts: int, run_loop):
+    def fake_workflow(*, max_heal_attempts: int, run_loop, collect_changed_files):
         return SimpleNamespace(
             ok=True,
             report=SimpleNamespace(
