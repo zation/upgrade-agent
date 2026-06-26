@@ -283,3 +283,104 @@ def test_main_accepts_case_directory_and_prints_json_summary(tmp_path: Path, cap
     assert output["ok"] is True
     assert output["count"] == 2
     assert [result["case_name"] for result in output["results"]] == ["a", "b"]
+
+
+def test_trace_sequence_check_verifies_ordered_events(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "trace sequence",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm test"}}}\\n'
+                        '{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trace_sequence",
+                        "path": "trace.jsonl",
+                        "sequence": [
+                            {
+                                "event_type": "tool_call",
+                                "tool": "run_command",
+                                "command_contains": "npm test",
+                            },
+                            {
+                                "event_type": "tool_call",
+                                "tool": "run_command",
+                                "command_contains": "npm install",
+                            },
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.checks[0].name == "trace_sequence:trace.jsonl"
+
+
+def test_trace_sequence_check_reports_missing_event(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "trace sequence failure",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trace_sequence",
+                        "path": "trace.jsonl",
+                        "sequence": [
+                            {
+                                "event_type": "tool_call",
+                                "tool": "run_command",
+                                "command_contains": "npm test",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.checks[0].name == "trace_sequence:trace.jsonl"
+    assert "missing sequence item 1" in result.checks[0].message

@@ -280,6 +280,8 @@ def _run_check(check: dict[str, Any], workdir: Path, *, env: dict[str, str]) -> 
         return _check_command(check, workdir, env=env)
     if check_type == "git_diff":
         return _check_git_diff(check, workdir)
+    if check_type == "trace_sequence":
+        return _check_trace_sequence(check, workdir)
     return CheckResult(name=str(check_type or "unknown"), ok=False, message="unknown check type")
 
 
@@ -323,6 +325,70 @@ def _check_git_diff(check: dict[str, Any], workdir: Path) -> CheckResult:
     if unexpected:
         message = f"unexpected changed paths={unexpected}; {message}"
     return CheckResult(name="git_diff", ok=ok, message=message)
+
+
+def _check_trace_sequence(check: dict[str, Any], workdir: Path) -> CheckResult:
+    trace_path = Path(check["path"])
+    full = trace_path if trace_path.is_absolute() else workdir / trace_path
+    name = f"trace_sequence:{trace_path.as_posix()}"
+    if not full.exists():
+        return CheckResult(name=name, ok=False, message=f"trace file not found: {trace_path}")
+    events = _read_trace_events(full)
+    cursor = 0
+    for index, requirement in enumerate(check.get("sequence", []), 1):
+        match_at = _find_trace_match(events, requirement, start=cursor)
+        if match_at is None:
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"missing sequence item {index}: {requirement}",
+            )
+        cursor = match_at + 1
+    return CheckResult(
+        name=name,
+        ok=True,
+        message=f"matched {len(check.get('sequence', []))} ordered trace event(s)",
+    )
+
+
+def _read_trace_events(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSONL trace at {path}:{line_no}: {e}") from e
+        if isinstance(event, dict):
+            events.append(event)
+    return events
+
+
+def _find_trace_match(
+    events: list[dict[str, Any]], requirement: dict[str, Any], *, start: int
+) -> int | None:
+    for index in range(start, len(events)):
+        if _trace_event_matches(events[index], requirement):
+            return index
+    return None
+
+
+def _trace_event_matches(event: dict[str, Any], requirement: dict[str, Any]) -> bool:
+    data = event.get("data", {})
+    if requirement.get("event_type") and event.get("type") != requirement["event_type"]:
+        return False
+    if requirement.get("tool") and data.get("name") != requirement["tool"]:
+        return False
+    if needle := requirement.get("command_contains"):
+        command = data.get("input", {}).get("command", "")
+        if needle not in command:
+            return False
+    if needle := requirement.get("input_contains"):
+        rendered = json.dumps(data.get("input", {}), ensure_ascii=False, sort_keys=True)
+        if needle not in rendered:
+            return False
+    return True
 
 
 def _run(args: list[str], workdir: Path) -> subprocess.CompletedProcess[str]:

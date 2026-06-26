@@ -134,7 +134,8 @@ release-note sources；`research-upgrade` 已作为只读 breaking-change resear
 - [x] `tests/test_evals_runner.py`：覆盖成功/失败 check，并确认不会修改原 target。
 - [x] 扩展 case schema：加入 `timeout`、环境变量、setup/teardown、expected token/iteration budget。
 - [x] 支持多 case 批量运行：输出 JSON summary，适合 CI 或本地回归。
-- [ ] 加 trace-based trajectory eval：从 JSONL trace 判断是否先 baseline、是否一包一包升级、
+- [x] 加通用 `trace_sequence` check：从 JSONL trace 判断关键 tool/command 是否按顺序出现。
+- [ ] 增加专用 trajectory policies：判断是否先 baseline、是否一包一包升级、
   是否读取真实失败输出、是否产生越权/无关修改。
 - [ ] 失败分类：`baseline_missing`、`test_failed`、`wrong_diff`、`timeout`、`llm_error`、
   `trajectory_violation`，方便比较优化前后。
