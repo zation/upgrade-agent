@@ -122,15 +122,17 @@
 
 ### M6.1 analyze-coverage 分析技能
 
-- [ ] `skills/add_tests/prompts.py`：补测试专用 system prompt
-- [ ] 先分析哪些模块/函数缺少测试（读源码 + 读覆盖率报告）
-- [ ] 输出"测试缺口列表"：每个缺口有 file / function / 建议的测试场景
+- [x] `skills/add_tests/prompts.py`：补测试专用 system prompt
+- [x] 先分析哪些模块/函数缺少测试（读源码 + 读覆盖率报告）
+- [x] 输出"测试缺口列表"：每个缺口有 file / function / 建议的测试场景
+- [x] CLI 新增 `analyze-coverage` 只读入口
 
 ### M6.2 generate-tests 执行技能
 
-- [ ] 对每个缺口，用 ReActLoop 生成测试代码
+- [x] 对每个缺口，用 ReActLoop 生成测试代码
 - [ ] 写入 `test/*.test.js`（遵守项目现有测试风格）
-- [ ] 跑 `npm test` 验证新测试通过且覆盖率提升
+- [x] 跑 `npm test` 验证新测试通过且覆盖率提升
+- [x] CLI 新增 `generate-tests` 执行入口
 
 ---
 

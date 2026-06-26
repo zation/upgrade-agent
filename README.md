@@ -22,6 +22,8 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 - **M5 🚧** — `dependency_research` starts the changelog/RAG track by producing
   structured npm metadata, version-span, and candidate release-note sources;
   `research-upgrade` adds a read-only breaking-change researcher flow.
+- **M6 🚧** — add-tests workflow started with `analyze-coverage` for read-only
+  test-gap discovery and `generate-tests` for focused test generation.
 
 ## Techniques covered
 
@@ -61,6 +63,8 @@ cd ../chai-like && npm install   # establish a working baseline
 
 # 4. Run the agent against it
 uv run refactor-agent analyze ../chai-like
+uv run refactor-agent analyze-coverage ../chai-like
+uv run refactor-agent generate-tests ../chai-like "cover uncovered public APIs"
 uv run refactor-agent research-upgrade ../chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade ../chai-like "mocha 4 -> 11"
 uv run refactor-agent upgrade-graph ../chai-like "mocha 4 -> 11"
@@ -73,6 +77,8 @@ uv run refactor-agent ask       ../chai-like "any free-form task"
 | Command | Tools | Purpose |
 |---------|-------|---------|
 | `analyze <project>` | read-only | Profile a project; report upgrade risks. |
+| `analyze-coverage <project> [focus]` | read-only | Inspect tests/coverage and report prioritized test gaps. |
+| `generate-tests <project> [focus]` | full | Add focused tests, then verify `npm test` and coverage if available. |
 | `research-upgrade <project> "<dep>"` | read-only | Research relevant breaking changes before editing. |
 | `upgrade <project> "<dep>"` | full | Upgrade ONE dep: baseline → change → verify. |
 | `upgrade-graph <project> "<dep>"` | full | Upgrade ONE dep via LangGraph: execute → verify → self-heal. |
@@ -103,5 +109,4 @@ Day-to-day rules for contributors/agents: see [AGENTS.md](AGENTS.md).
 - **M3 🚧** real all-dependencies upgrade with baseline/verify.
 - **M4 🚧** LangGraph `StateGraph` + `verify → self-heal` edge.
 - **M5 🚧** RAG changelog retrieval + "breaking-change researcher" sub-agent.
-- **M6** eval harness + CLI polish.
-- **M7** add-tests skill.
+- **M6 🚧** add-tests skill: coverage-gap analysis + focused test generation.

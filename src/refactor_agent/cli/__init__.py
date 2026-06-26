@@ -1,6 +1,8 @@
 """CLI entrypoint.
 
     uv run refactor-agent analyze ../some-project
+    uv run refactor-agent analyze-coverage ../some-project
+    uv run refactor-agent generate-tests ../some-project "cover src/foo edge cases"
     uv run refactor-agent research-upgrade ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
     uv run refactor-agent upgrade-graph ../some-project "mocha 4 -> 11"
@@ -9,6 +11,8 @@
 
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
+- ``analyze-coverage`` — read-only test-gap and coverage analysis.
+- ``generate-tests`` — add focused tests and verify them.
 - ``research-upgrade`` — read-only breaking-change research for one upgrade.
 - ``upgrade`` — full-tool upgrade of ONE dependency (baseline → change → verify).
 - ``upgrade-graph`` — LangGraph-orchestrated upgrade with verify → self-heal.
@@ -29,7 +33,15 @@ from rich.console import Console
 
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
 from ..orchestrator import UpgradeGraphRunner
-from ..skills import ANALYZE, BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_ALL
+from ..skills import (
+    ADD_TESTS_ANALYZE,
+    ADD_TESTS_GENERATE,
+    ANALYZE,
+    BASE_AGENT,
+    BREAKING_CHANGE_RESEARCHER,
+    UPGRADE,
+    UPGRADE_ALL,
+)
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
 
@@ -93,6 +105,81 @@ def analyze(
         "Analyze this project and produce an upgrade-readiness profile. "
         "Read package.json, the main source files, and CI config; then summarize "
         "dependencies, tech/style signals, and upgrade risks."
+    )
+    result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command("analyze-coverage")
+def analyze_coverage(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    focus: str | None = typer.Argument(
+        None, help="Optional source area, module, or behavior to prioritize."
+    ),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(25, "--max-iters"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Read-only analysis of missing or weak test coverage."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]analyzing coverage[/bold] in {workdir}")
+
+    client = create_client()
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            model=model,
+            system_prompt=ADD_TESTS_ANALYZE,
+            max_iterations=max_iterations,
+        ),
+        tools=read_only_tools(),
+        workdir=workdir,
+        callbacks=RichUI(verbose=verbose),
+    )
+    focus_text = f"\nPrioritize this focus area: {focus}." if focus else ""
+    task = (
+        "Analyze this project's current tests and coverage signals. "
+        "Produce a prioritized test gap list with file / function / suggested "
+        "test scenarios, evidence, and recommended test locations."
+        f"{focus_text}"
+    )
+    result = loop.run(task)
+    raise typer.Exit(code=0 if result.ok else 1)
+
+
+@app.command("generate-tests")
+def generate_tests(
+    project: Path = typer.Argument(..., help="Path to the target project."),
+    focus: str = typer.Argument(
+        "highest-priority uncovered behavior",
+        help="Test gap, source area, or behavior to cover.",
+    ),
+    model: str = typer.Option(_default_model(), "--model", "-m"),
+    max_iterations: int = typer.Option(45, "--max-iters"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Generate focused tests, then verify npm test and coverage if available."""
+    workdir = _resolve_workdir(project)
+    console.rule(f"[bold]generating tests[/bold] in {workdir}")
+
+    client = create_client()
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            model=model,
+            system_prompt=ADD_TESTS_GENERATE,
+            max_iterations=max_iterations,
+        ),
+        tools=default_tools(),
+        workdir=workdir,
+        callbacks=RichUI(verbose=verbose),
+    )
+    task = (
+        f"Generate tests for this focus area: {focus}.\n\n"
+        "Start by establishing the existing npm test baseline, inspect current "
+        "test style and coverage signals, add a focused reviewable batch of "
+        "tests, verify with npm test, check coverage if available, then report "
+        "the final result and remaining gaps."
     )
     result = loop.run(task)
     raise typer.Exit(code=0 if result.ok else 1)
