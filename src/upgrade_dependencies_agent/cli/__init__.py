@@ -23,6 +23,7 @@ the RichUI. This is the user-facing surface; everything substantive is in core/.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Callable
@@ -34,6 +35,7 @@ from rich.console import Console
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
 from ..orchestrator import (
     StageLoopRequest,
+    UpgradeBackboneResult,
     run_upgrade_all_backbone_workflow,
     run_upgrade_backbone_workflow,
 )
@@ -229,7 +231,7 @@ def _run_upgrade_backbone_cli(
     max_heal_attempts: int,
     workdir: str,
     ui: RichUI,
-) -> bool:
+) -> UpgradeBackboneResult:
     client = create_client()
     result = run_upgrade_backbone_workflow(
         target,
@@ -242,7 +244,7 @@ def _run_upgrade_backbone_cli(
             ui=ui,
         ),
     )
-    return result.ok
+    return result
 
 
 def _run_upgrade_all_backbone_cli(
@@ -252,7 +254,7 @@ def _run_upgrade_all_backbone_cli(
     max_heal_attempts: int,
     workdir: str,
     ui: RichUI,
-) -> bool:
+) -> UpgradeBackboneResult:
     client = create_client()
     result = run_upgrade_all_backbone_workflow(
         max_heal_attempts=max_heal_attempts,
@@ -264,7 +266,7 @@ def _run_upgrade_all_backbone_cli(
             ui=ui,
         ),
     )
-    return result.ok
+    return result
 
 
 def _make_stage_loop_runner(
@@ -333,6 +335,16 @@ def _dirty_worktree_status(workdir: str) -> str | None:
     return status or None
 
 
+def _write_report_json(result: UpgradeBackboneResult, path: Path) -> None:
+    if result.report is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(result.report.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 @app.command()
 def upgrade(
     project: Path = typer.Argument(..., help="Path to the target project."),
@@ -340,12 +352,13 @@ def upgrade(
     model: str = typer.Option(_default_model(), "--model", "-m"),
     max_iterations: int = typer.Option(40, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
+    report_json: Path | None = typer.Option(None, "--report-json"),
 ) -> None:
     """Upgrade ONE dependency: baseline → change → verify (with self-heal)."""
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]upgrading[/bold] {target} in {workdir}")
 
-    ok = _run_upgrade_backbone_cli(
+    result = _run_upgrade_backbone_cli(
         target=target,
         model=model,
         max_iterations=max_iterations,
@@ -353,7 +366,9 @@ def upgrade(
         workdir=workdir,
         ui=RichUI(verbose=verbose),
     )
-    raise typer.Exit(code=0 if ok else 1)
+    if report_json is not None:
+        _write_report_json(result, report_json)
+    raise typer.Exit(code=0 if result.ok else 1)
 
 
 @app.command("upgrade-all")
@@ -362,19 +377,22 @@ def upgrade_all(
     model: str = typer.Option(_default_model(), "--model", "-m"),
     max_iterations: int = typer.Option(80, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
+    report_json: Path | None = typer.Option(None, "--report-json"),
 ) -> None:
     """Upgrade all direct dependencies to latest, one package at a time."""
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
 
-    ok = _run_upgrade_all_backbone_cli(
+    result = _run_upgrade_all_backbone_cli(
         model=model,
         max_iterations=max_iterations,
         max_heal_attempts=1,
         workdir=workdir,
         ui=RichUI(verbose=verbose),
     )
-    raise typer.Exit(code=0 if ok else 1)
+    if report_json is not None:
+        _write_report_json(result, report_json)
+    raise typer.Exit(code=0 if result.ok else 1)
 
 
 @app.command()

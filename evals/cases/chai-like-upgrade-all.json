@@ -9,7 +9,9 @@
     "run",
     "upgrade-dependencies-agent",
     "upgrade-all",
-    "{workdir}"
+    "{workdir}",
+    "--report-json",
+    "agent-report.json"
   ],
   "teardown": [],
   "budgets": {
@@ -21,6 +23,16 @@
       "type": "command",
       "command": "npm test",
       "timeout": 300
+    },
+    {
+      "type": "structured_report",
+      "path": "agent-report.json",
+      "ok": true,
+      "allowed_changed_files": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "allow_remaining_risks": false
     }
   ]
 }
