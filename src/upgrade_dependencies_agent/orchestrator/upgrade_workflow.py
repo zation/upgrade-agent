@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from langgraph.graph import END, StateGraph
+
 from ..core import LoopResult
 from ..core.structured import StructuredParseError, parse_structured_text
 from ..skills import BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_ALL
@@ -18,6 +20,7 @@ from .state import (
     UpgradeQueue,
     UpgradeQueueItem,
     VerificationResult,
+    make_upgrade_graph_state,
 )
 from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
 
@@ -178,7 +181,7 @@ def run_upgrade_all_backbone_workflow(
     run_loop: StageLoopRunner,
     collect_changed_files: ChangedFilesCollector | None = None,
 ) -> UpgradeBackboneResult:
-    """Run the concrete batch-upgrade workflow using the full graph backbone."""
+    """Run the concrete batch-upgrade workflow with explicit package-level graph steps."""
     target = "all direct dependencies"
 
     def baseline(state: UpgradeGraphState) -> UpgradeGraphState:
@@ -234,74 +237,97 @@ def run_upgrade_all_backbone_workflow(
             ),
         }
 
-    def execute_all(state: UpgradeGraphState) -> UpgradeGraphState:
+    def select_package(state: UpgradeGraphState) -> UpgradeGraphState:
         queue = state.get("queue") or UpgradeQueue()
-        current_state = {**state, "queue": queue}
-        last_result = state.get("execute_result")
-        package_results = list(state.get("package_results", []))
-
-        for index, item in enumerate(queue.pending(), start=1):
-            package_state = {
-                **current_state,
-                "current_dependency": item.name,
-            }
-            execute_result = run_loop(
-                StageLoopRequest(
-                    stage="execute_package",
-                    system_prompt=UPGRADE,
-                    task=_batch_execute_package_task(
-                        item,
-                        index,
-                        len(queue.packages),
-                        package_state,
-                    ),
-                    enforce_baseline_guardrail=True,
-                    current_dependency=item.name,
-                    allowed_files=_allowed_files_from_state(package_state),
-                )
-            )
-            verify_result = run_loop(
-                StageLoopRequest(
-                    stage="verify_package",
-                    system_prompt=BASE_AGENT,
-                    task=_batch_verify_package_task(item, execute_result),
-                )
-            )
-            package_verification = _verification_from_result(verify_result)
-            if package_verification.ok:
-                item.status = "done"
-                item.reason = None
-            else:
-                item.status = "failed"
-                item.reason = package_verification.summary
-
-            package_results.append(
-                PackageUpgradeRecord(
-                    name=item.name,
-                    status=item.status,
-                    summary=package_verification.summary,
-                    changed_files=current_state.get("changed_files", []),
-                )
-            )
-            last_result = verify_result
-            current_state = {
-                **package_state,
+        item = _current_queue_item({**state, "queue": queue})
+        if item is None:
+            return {
+                **state,
                 "queue": queue,
-                "package_results": package_results,
-                "execute_result": execute_result,
-                "verify_result": verify_result,
-                "final_result": verify_result,
+                "current_dependency": target,
             }
-
         return {
-            **current_state,
+            **state,
             "queue": queue,
-            "current_dependency": target,
-            "verify_result": last_result,
-            "final_result": last_result,
+            "current_dependency": item.name,
+            "history": [*state.get("history", []), f"select_package:{item.name}"],
         }
 
-    def verify(state: UpgradeGraphState) -> UpgradeGraphState:
+    def execute_package(state: UpgradeGraphState) -> UpgradeGraphState:
+        queue = state.get("queue") or UpgradeQueue()
+        item = _current_queue_item({**state, "queue": queue})
+        if item is None:
+            return {**state, "queue": queue, "current_dependency": target}
+        package_state = {
+            **state,
+            "queue": queue,
+            "current_dependency": item.name,
+        }
+        execute_result = run_loop(
+            StageLoopRequest(
+                stage="execute_package",
+                system_prompt=UPGRADE,
+                task=_batch_execute_package_task(
+                    item,
+                    _queue_item_position(queue, item),
+                    len(queue.packages),
+                    package_state,
+                ),
+                enforce_baseline_guardrail=True,
+                current_dependency=item.name,
+                allowed_files=_allowed_files_from_state(package_state),
+            )
+        )
+        return {
+            **package_state,
+            "execute_result": execute_result,
+            "final_result": execute_result,
+            "history": [*state.get("history", []), f"execute_package:{item.name}"],
+        }
+
+    def verify_package(state: UpgradeGraphState) -> UpgradeGraphState:
+        queue = state.get("queue") or UpgradeQueue()
+        item = _current_queue_item({**state, "queue": queue})
+        execute_result = state.get("execute_result")
+        if item is None or execute_result is None:
+            return {**state, "queue": queue, "current_dependency": target}
+
+        verify_result = run_loop(
+            StageLoopRequest(
+                stage="verify_package",
+                system_prompt=BASE_AGENT,
+                task=_batch_verify_package_task(item, execute_result),
+            )
+        )
+        package_verification = _verification_from_result(verify_result)
+        if package_verification.ok:
+            item.status = "done"
+            item.reason = None
+        else:
+            item.status = "failed"
+            item.reason = package_verification.summary
+
+        package_results = [
+            *state.get("package_results", []),
+            PackageUpgradeRecord(
+                name=item.name,
+                status=item.status,
+                summary=package_verification.summary,
+                changed_files=state.get("changed_files", []),
+            ),
+        ]
+        verdict = "ok" if package_verification.ok else "fail"
+        return {
+            **state,
+            "queue": queue,
+            "current_dependency": None,
+            "package_results": package_results,
+            "verify_result": verify_result,
+            "final_result": verify_result,
+            "history": [*state.get("history", []), f"verify_package:{item.name}:{verdict}"],
+        }
+
+    def final_verify(state: UpgradeGraphState) -> UpgradeGraphState:
         result = run_loop(
             StageLoopRequest(
                 stage="verify",
@@ -309,14 +335,19 @@ def run_upgrade_all_backbone_workflow(
                 task=_batch_verify_task(state),
             )
         )
+        verification = _verification_from_result(result)
+        verdict = "ok" if verification.ok else "fail"
         return {
             **state,
             "verify_result": result,
-            "verification": _verification_from_result(result),
+            "verification": verification,
             "final_result": result,
+            "needs_heal": not verification.ok,
+            "history": [*state.get("history", []), f"final_verify:{verdict}"],
         }
 
     def heal(state: UpgradeGraphState) -> UpgradeGraphState:
+        attempts = state.get("heal_attempts", 0) + 1
         result = run_loop(
             StageLoopRequest(
                 stage="heal",
@@ -327,7 +358,13 @@ def run_upgrade_all_backbone_workflow(
                 allowed_files=_allowed_files_from_state(state),
             )
         )
-        return {**state, "heal_result": result, "final_result": result}
+        return {
+            **state,
+            "heal_attempts": attempts,
+            "heal_result": result,
+            "final_result": result,
+            "history": [*state.get("history", []), f"heal:{attempts}"],
+        }
 
     def report(state: UpgradeGraphState) -> UpgradeGraphState:
         verification = state.get("verification")
@@ -343,19 +380,103 @@ def run_upgrade_all_backbone_workflow(
                 changed_files=changed_files,
                 remaining_risks=[] if ok else ["batch upgrade verification failed"],
             ),
+            "history": [*state.get("history", []), "report"],
         }
 
-    runner = UpgradeBackboneRunner(
-        baseline=baseline,
-        research=queue,
-        plan=plan,
-        execute=execute_all,
-        verify=verify,
-        heal=heal,
-        report=report,
-        max_heal_attempts=max_heal_attempts,
+    graph = StateGraph(UpgradeGraphState)
+    graph.add_node("baseline", _history_stage(baseline, "baseline"))
+    graph.add_node("queue", _history_stage(queue, "queue"))
+    graph.add_node("plan", _history_stage(plan, "plan"))
+    graph.add_node("select_package", select_package)
+    graph.add_node("execute_package", execute_package)
+    graph.add_node("verify_package", verify_package)
+    graph.add_node("final_verify", final_verify)
+    graph.add_node("heal", heal)
+    graph.add_node("report", report)
+    graph.set_entry_point("baseline")
+    graph.add_edge("baseline", "queue")
+    graph.add_edge("queue", "plan")
+    graph.add_edge("plan", "select_package")
+    graph.add_conditional_edges(
+        "select_package",
+        _route_after_batch_select,
+        {
+            "execute_package": "execute_package",
+            "final_verify": "final_verify",
+        },
     )
-    return runner.run("Upgrade all direct dependencies")
+    graph.add_edge("execute_package", "verify_package")
+    graph.add_edge("verify_package", "select_package")
+    graph.add_conditional_edges(
+        "final_verify",
+        _route_after_batch_verify,
+        {
+            "heal": "heal",
+            "report": "report",
+        },
+    )
+    graph.add_edge("heal", "final_verify")
+    graph.add_edge("report", END)
+
+    app = graph.compile()
+    state = app.invoke(
+        make_upgrade_graph_state(
+            "Upgrade all direct dependencies",
+            max_heal_attempts=max_heal_attempts,
+        )
+    )
+    report_result = state.get("report")
+    return UpgradeBackboneResult(
+        ok=bool(report_result and report_result.ok),
+        state=state,
+        report=report_result,
+        heal_attempts=state.get("heal_attempts", 0),
+        history=tuple(state.get("history", [])),
+    )
+
+
+def _history_stage(
+    runner: Callable[[UpgradeGraphState], UpgradeGraphState],
+    history_item: str,
+) -> Callable[[UpgradeGraphState], UpgradeGraphState]:
+    def wrapped(state: UpgradeGraphState) -> UpgradeGraphState:
+        updated = runner(state)
+        return {**updated, "history": [*updated.get("history", []), history_item]}
+
+    return wrapped
+
+
+def _route_after_batch_select(state: UpgradeGraphState) -> str:
+    return "execute_package" if _current_queue_item(state) else "final_verify"
+
+
+def _route_after_batch_verify(state: UpgradeGraphState) -> str:
+    verification = state.get("verification")
+    if verification and verification.ok:
+        return "report"
+    if state.get("heal_attempts", 0) < state.get("max_heal_attempts", 0):
+        return "heal"
+    return "report"
+
+
+def _current_queue_item(state: UpgradeGraphState) -> UpgradeQueueItem | None:
+    queue = state.get("queue")
+    dependency = state.get("current_dependency")
+    if queue is None:
+        return None
+    if dependency:
+        for item in queue.packages:
+            if item.name == dependency and item.status == "pending":
+                return item
+    pending = queue.pending()
+    return pending[0] if pending else None
+
+
+def _queue_item_position(queue: UpgradeQueue, item: UpgradeQueueItem) -> int:
+    for index, queue_item in enumerate(queue.packages, start=1):
+        if queue_item.name == item.name:
+            return index
+    return 1
 
 
 def _baseline_task(target: str) -> str:

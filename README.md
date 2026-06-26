@@ -90,7 +90,7 @@ uv run upgrade-dependencies-agent ask ../chai-like "your task"
 | `generate-tests <project> [focus]` | 完整工具 | 添加聚焦测试，并运行测试和 coverage 验证。 |
 | `research-upgrade <project> "<dep>"` | 只读 | 升级前研究 breaking changes。 |
 | `upgrade <project> "<dep>"` | 完整工具 | 标准单依赖升级入口：baseline → research → plan → execute → verify → report。 |
-| `upgrade-all <project>` | 完整工具 | 批量升级所有直接依赖：baseline → queue → execute → verify → report。 |
+| `upgrade-all <project>` | 完整工具 | 批量升级所有直接依赖：baseline → queue → 逐包 execute/verify → final verify → report。 |
 | `ask <project> "<task>"` | 默认完整工具 | 执行任意任务；可加 `--read-only` 禁用写入和 shell。 |
 
 常用参数：

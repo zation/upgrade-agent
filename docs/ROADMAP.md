@@ -272,12 +272,12 @@
 - [x] LangGraph structured artifacts v1：
   - verify 节点优先解析 JSON `VerificationResult`，并保留 legacy verdict fallback。
   - `upgrade-all` queue 节点优先解析 JSON `UpgradeQueue`。
-  - `upgrade-all` execute 阶段基于结构化 package queue 逐包派发执行与验证，并回写 package 状态。
+  - `upgrade-all` 已基于结构化 package queue 显式执行 `select_package` → `execute_package` → `verify_package` 条件边，并回写 package 状态。
 - [ ] LangGraph structured artifacts 后续：
   - baseline / research / plan / report 阶段通过 structured output 稳定产出 artifact。
   - [x] P1：将真实 changed files 采集前移到 workflow/report node，并写入 graph state。
   - [x] P2a：为 `upgrade-all` 增加 package-level result state。
-  - [ ] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。
+  - [x] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。
 - [x] `core/structured.py` v1：从模型文本中提取 JSON object，并用 Pydantic schema 校验。
 - [ ] provider 原生 structured output：
   - 封装 Claude / OpenAI-compatible 的 JSON / response-format 参数。

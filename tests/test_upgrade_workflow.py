@@ -173,10 +173,15 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert result.ok
     assert result.history == (
         "baseline",
-        "research",
+        "queue",
         "plan",
-        "execute",
-        "verify:ok",
+        "select_package:mocha",
+        "execute_package:mocha",
+        "verify_package:mocha:ok",
+        "select_package:chai",
+        "execute_package:chai",
+        "verify_package:chai:ok",
+        "final_verify:ok",
         "report",
     )
     assert [request.stage for request in requests] == [
@@ -235,6 +240,18 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
 
     assert result.ok
     assert result.heal_attempts == 1
+    assert result.history == (
+        "baseline",
+        "queue",
+        "plan",
+        "select_package:mocha",
+        "execute_package:mocha",
+        "verify_package:mocha:ok",
+        "final_verify:fail",
+        "heal:1",
+        "final_verify:ok",
+        "report",
+    )
     assert [request.stage for request in requests] == [
         "baseline",
         "queue",
