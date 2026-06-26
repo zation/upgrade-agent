@@ -8,27 +8,15 @@
 并补充测试。项目本身用 Python 写，运行时调用 LLM（Anthropic Claude 或 OpenAI-compatible
 API，例如 DeepSeek），并操作另一个磁盘目录中的目标项目。
 
-当前主要目标项目是 `/Users/liuyang/Projects/chai-like`。
-
 项目目标有两个：
 
 - 做出一个真实可用的依赖升级工具。
 - 作为学习和简历项目，覆盖常见 AI Agent 工程技术。
 
-## 当前状态
-
-- **M1 ✅ Agent Core v1**：手写 ReAct loop、工具协议、路径安全、trace 已完成。
-- **M2 ✅ 单依赖升级 v1**：`upgrade` 可完成真实单依赖升级闭环。
-- **M3 ✅ 批量升级与薄 LangGraph 编排 v1**：`upgrade-all` 和 `upgrade-graph` 已有可用 v1。
-- **M4 ✅ 依赖研究工具 v1**：npm metadata、release/source fetching、只读 researcher 已完成。
-- **M5 ✅ 确定性评估框架 v1**：eval runner、batch、trajectory checks、failure reason 已完成。
-- **M6 ✅ 补测试 workflow v1**：`analyze-coverage` 和 `generate-tests` 已完成首版。
-- **M7+ ⏳**：后续以 [docs/ROADMAP.md](docs/ROADMAP.md) 为准。
-
 ## 基本规则
 
 1. **本仓库只改 agent 自身，不直接改目标项目。**  
-   `chai-like` 由 agent 运行时操作，不要从本仓库直接提交或编辑它。
+   目标项目只能由 agent 运行时操作；不要从本仓库直接编辑、提交或清理目标项目。
 2. **不要提交 secrets。**  
    `.env` 已 gitignore，只提交 `.env.example`。
 3. **一个逻辑变更一个 commit。**  
@@ -52,18 +40,17 @@ uv run ruff check .
 uv run ruff format --check .
 uv run pytest -v
 
-# 运行 agent
-uv run upgrade-dependencies-agent analyze /Users/liuyang/Projects/chai-like
-uv run upgrade-dependencies-agent analyze-coverage /Users/liuyang/Projects/chai-like
-uv run upgrade-dependencies-agent generate-tests /Users/liuyang/Projects/chai-like "cover uncovered behavior"
-uv run upgrade-dependencies-agent research-upgrade /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade-graph /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade-all /Users/liuyang/Projects/chai-like
-uv run upgrade-dependencies-agent ask /Users/liuyang/Projects/chai-like "your task"
+# 运行 agent。将 ../target-project 替换成目标项目目录。
+uv run upgrade-dependencies-agent analyze ../target-project
+uv run upgrade-dependencies-agent analyze-coverage ../target-project
+uv run upgrade-dependencies-agent generate-tests ../target-project "cover uncovered behavior"
+uv run upgrade-dependencies-agent research-upgrade ../target-project "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade ../target-project "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-graph ../target-project "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-all ../target-project
+uv run upgrade-dependencies-agent ask ../target-project "your task"
 
 # 运行 eval
-uv run python -m evals.runner evals/cases/chai-like-mocha-upgrade.json
 uv run python -m evals.runner evals/cases
 ```
 
@@ -138,7 +125,7 @@ CLI 可用 `--model` 覆盖。
 
 ## 不要做什么
 
-- 不要直接编辑或提交 `/Users/liuyang/Projects/chai-like`。
+- 不要直接编辑、提交或清理目标项目目录；让 agent 通过 CLI 在运行时操作它。
 - 不要为了省事引入新的 agent framework 替代手写 ReAct loop。
 - 不要让 `core/` 依赖具体 provider、target project、skill 或 CLI。
 - 不要绕过 `safe_resolve()` 访问目标项目文件。
