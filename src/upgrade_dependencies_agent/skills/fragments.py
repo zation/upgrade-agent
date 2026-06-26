@@ -47,6 +47,25 @@ changes, CLI/config changes, and removed APIs.
 5. Search the target project for actual usage of the dependency so the report \
 distinguishes relevant project risks from generic upstream changes."""
 
+TEST_GENERATION_WORKFLOW = """\
+1. Establish a green baseline first. Read package.json, run npm test, and record \
+the exact passing/failing count. If the baseline is red, stop and report. If no \
+npm test script exists, inspect package.json and choose the smallest viable test \
+harness, preferring an existing dependency or Node's built-in test runner. Add \
+the minimal test script needed to run the new tests, then treat the first \
+successful run as the baseline for this new test harness.
+2. Inspect existing tests before writing anything. Follow the existing test \
+style, assertion library, file naming, fixture setup, and module import style.
+3. Identify a small test gap list from source/tests/coverage. If the user gave \
+a specific gap, focus on that gap first.
+4. Add tests one gap at a time, preferably in the existing nearest test file. \
+Create a new test/*.test.js file only when no appropriate file exists.
+5. Run npm test after each meaningful addition. Read the actual output and fix \
+only failures introduced by your test code.
+6. When a coverage command or coverage report is available, verify that coverage \
+improves or explain why it could not be measured.
+7. Review git diff before reporting."""
+
 
 def shared_contracts(*rules: str) -> str:
     """Render a standard shared-contract section for task prompts."""

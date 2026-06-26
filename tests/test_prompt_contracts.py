@@ -16,6 +16,7 @@ from upgrade_dependencies_agent.skills.fragments import (
     ONE_DEPENDENCY_RULE,
     READ_ONLY_RULE,
     SOURCE_EVIDENCE_RULE,
+    TEST_GENERATION_WORKFLOW,
     TEST_STYLE_RULE,
     VERIFY_RULE,
     shared_contracts,
@@ -77,3 +78,7 @@ def test_base_agent_keeps_global_principles_not_tool_inventory() -> None:
 def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:
     assert BREAKING_CHANGE_RESEARCH_WORKFLOW in BREAKING_CHANGE_RESEARCHER
     assert BREAKING_CHANGE_RESEARCH_WORKFLOW in UPGRADE
+
+
+def test_generate_tests_uses_shared_test_generation_workflow() -> None:
+    assert TEST_GENERATION_WORKFLOW in ADD_TESTS_GENERATE

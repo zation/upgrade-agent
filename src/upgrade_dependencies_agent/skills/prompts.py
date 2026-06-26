@@ -18,7 +18,6 @@ from .fragments import (
     READ_ONLY_RULE,
     SOURCE_EVIDENCE_RULE,
     VERIFY_RULE,
-    shared_contracts,
 )
 from .rendering import PromptSection, SkillPrompt
 
@@ -198,20 +197,20 @@ what blocked you. Do not leave the project in a broken state.""",
 ).render()
 
 
-UPGRADE_ALL = (
-    BASE_AGENT
-    + "\n\n"
-    + """\
-## Current task: upgrade all direct dependencies
-
+UPGRADE_ALL = SkillPrompt(
+    base=BASE_AGENT,
+    contracts=(BASELINE_RULE, VERIFY_RULE, ONE_DEPENDENCY_RULE, MINIMAL_CHANGE_RULE),
+    sections=(
+        PromptSection(
+            "Current task: upgrade all direct dependencies",
+            """\
 You are upgrading every direct npm dependency and devDependency in the target \
 project to the latest stable version reported by npm. Do NOT upgrade transitive \
-dependencies directly unless npm install updates them through the lockfile.
-
-"""
-    + shared_contracts(BASELINE_RULE, VERIFY_RULE, ONE_DEPENDENCY_RULE, MINIMAL_CHANGE_RULE)
-    + """\
-### Phase 1: Baseline (establish the "before" picture)
+dependencies directly unless npm install updates them through the lockfile.""",
+        ),
+        PromptSection(
+            "Phase 1: Baseline (establish the before picture)",
+            """\
 1. **Read package.json** and identify dependency sections: dependencies, \
 devDependencies, peerDependencies, optionalDependencies, and npm scripts.
 2. **Run the test command** and confirm tests pass BEFORE you change anything. \
@@ -224,9 +223,11 @@ nothing to upgrade, and stop.
    - Runtime dependencies first
    - Dev/test tooling next
    - Type/tooling-only packages last
-Do not include packages that are not listed directly in package.json.
-
-### Phase 2: Upgrade one package at a time
+Do not include packages that are not listed directly in package.json.""",
+        ),
+        PromptSection(
+            "Phase 2: Upgrade one package at a time",
+            """\
 5. For each package in the queue, upgrade exactly ONE package to latest:
    - Use `npm install <name>@latest` for dependencies.
    - Use `npm install -D <name>@latest` for devDependencies.
@@ -240,9 +241,11 @@ package's changes and continue with the remaining queue. Clearly report it.
 7. Use dependency_research before risky major jumps, then npm_view, \
 npm_releases, fetch_releases, and fetch_url only when a package upgrade causes \
 a failure or when the major-version span looks risky. Do not spend the whole \
-run researching every package up front.
-
-### Phase 3: Final verification
+run researching every package up front.""",
+        ),
+        PromptSection(
+            "Phase 3: Final verification",
+            """\
 8. After the queue is complete, run the full test command again and read the \
 actual output. Compare the final passing count to the baseline.
 9. Run git_diff and review package.json, lockfile, and any source/config edits.
@@ -252,9 +255,11 @@ actual output. Compare the final passing count to the baseline.
     - **Code/config fixes**: files changed and why
     - **Skipped/reverted**: packages that could not safely be upgraded and why
     - **Final result**: final passing/failing count vs baseline
-    - **Warnings/concerns**: remaining deprecations, peer warnings, or manual checks
-
-### Rules (break these and you fail the task)
+    - **Warnings/concerns**: remaining deprecations, peer warnings, or manual checks""",
+        ),
+        PromptSection(
+            "Rules",
+            """\
 - Never upgrade multiple packages in one step unless npm itself updates \
 transitive lockfile entries.
 - Never refactor unrelated code. Only fix breakages caused by the current \
@@ -262,5 +267,7 @@ package upgrade.
 - Prefer completing a safe subset over leaving the project broken. If a package \
 is too risky, revert that package and continue.
 - Do not edit the target project from outside the tool sandbox; all file work \
-must go through the available tools."""
-)
+must go through the available tools.""",
+        ),
+    ),
+).render()
