@@ -114,6 +114,27 @@ def test_upgrade_workflow_keeps_legacy_verdict_fallback() -> None:
     assert result.state["verification"].ok is True
 
 
+def test_upgrade_workflow_parses_structured_baseline_state() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "baseline":
+            return _result(
+                '{"ran": true, "green": true, "command": "npm test", "summary": "28 passing"}'
+            )
+        if request.stage == "verify":
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert result.state["baseline"].green is True
+    assert result.state["baseline"].command == "npm test"
+    assert result.state["baseline"].summary == "28 passing"
+
+
 def test_upgrade_workflow_report_collects_changed_files() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         if request.stage == "verify":
@@ -210,6 +231,28 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert [record.name for record in result.state["package_results"]] == ["mocha", "chai"]
     assert [record.status for record in result.state["package_results"]] == ["done", "done"]
     assert result.state["package_results"][0].summary == "package passed"
+
+
+def test_upgrade_all_workflow_parses_structured_baseline_state() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "baseline":
+            return _result(
+                '{"ran": true, "green": false, "command": "npm test", "summary": "1 failing"}'
+            )
+        if request.stage == "queue":
+            return _result('{"packages": []}')
+        if request.stage == "verify":
+            return _result('{"ok": false, "command": "npm test", "summary": "still failing"}')
+        return _result("stage complete")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=0,
+        run_loop=run_loop,
+    )
+
+    assert result.state["baseline"].green is False
+    assert result.state["baseline"].command == "npm test"
+    assert result.state["baseline"].summary == "1 failing"
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:

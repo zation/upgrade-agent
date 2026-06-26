@@ -61,12 +61,7 @@ def run_upgrade_backbone_workflow(
         )
         return {
             **state,
-            "baseline": BaselineState(
-                ran=True,
-                green=_result_passed(result),
-                command="npm test",
-                summary=result.final_text,
-            ),
+            "baseline": _baseline_from_result(result),
         }
 
     def research(state: UpgradeGraphState) -> UpgradeGraphState:
@@ -194,12 +189,7 @@ def run_upgrade_all_backbone_workflow(
         )
         return {
             **state,
-            "baseline": BaselineState(
-                ran=True,
-                green=_result_passed(result),
-                command="npm test",
-                summary=result.final_text,
-            ),
+            "baseline": _baseline_from_result(result),
         }
 
     def queue(state: UpgradeGraphState) -> UpgradeGraphState:
@@ -483,8 +473,10 @@ def _baseline_task(target: str) -> str:
     return (
         f"Establish the pre-upgrade baseline for this dependency upgrade: {target}.\n\n"
         "Run the project's existing npm test command, inspect the real output, "
-        "and report whether the baseline is green. Do not edit files. End with "
-        "`VERDICT: PASS` or `VERDICT: FAIL` on its own line."
+        "and report whether the baseline is green. Do not edit files. Return "
+        "exactly one JSON object with this shape: "
+        '{"ran": true, "green": true|false, "command": "npm test", '
+        '"summary": "28 passing or exact failure summary"}.'
     )
 
 
@@ -542,8 +534,10 @@ def _batch_baseline_task() -> str:
     return (
         "Establish the pre-upgrade baseline for upgrading all direct dependencies.\n\n"
         "Run the project's existing npm test command, inspect the real output, "
-        "and report whether the baseline is green. Do not edit files. End with "
-        "`VERDICT: PASS` or `VERDICT: FAIL` on its own line."
+        "and report whether the baseline is green. Do not edit files. Return "
+        "exactly one JSON object with this shape: "
+        '{"ran": true, "green": true|false, "command": "npm test", '
+        '"summary": "28 passing or exact failure summary"}.'
     )
 
 
@@ -631,6 +625,18 @@ def _batch_heal_task(state: UpgradeGraphState) -> str:
         "safely fixed, revert that package's attempted change and report the blocker.\n\n"
         f"Verification failure:\n{failure}"
     )
+
+
+def _baseline_from_result(result: LoopResult) -> BaselineState:
+    try:
+        return parse_structured_text(result.final_text, BaselineState)
+    except StructuredParseError:
+        return BaselineState(
+            ran=True,
+            green=_result_passed(result),
+            command="npm test",
+            summary=result.final_text,
+        )
 
 
 def _result_passed(result: LoopResult) -> bool:

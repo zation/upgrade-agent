@@ -274,7 +274,8 @@
   - `upgrade-all` queue 节点优先解析 JSON `UpgradeQueue`。
   - `upgrade-all` 已基于结构化 package queue 显式执行 `select_package` → `execute_package` → `verify_package` 条件边，并回写 package 状态。
 - [ ] LangGraph structured artifacts 后续：
-  - baseline / research / plan / report 阶段通过 structured output 稳定产出 artifact。
+  - [x] baseline 阶段优先解析 JSON `BaselineState`，保留 legacy verdict fallback。
+  - [ ] research / plan / report 阶段通过 structured output 稳定产出 artifact。
   - [x] P1：将真实 changed files 采集前移到 workflow/report node，并写入 graph state。
   - [x] P2a：为 `upgrade-all` 增加 package-level result state。
   - [x] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。
