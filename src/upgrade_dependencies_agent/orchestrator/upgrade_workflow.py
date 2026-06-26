@@ -15,6 +15,7 @@ from .state import (
     UpgradeGraphState,
     UpgradePlan,
     UpgradeQueue,
+    UpgradeQueueItem,
     VerificationResult,
 )
 from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
@@ -222,15 +223,58 @@ def run_upgrade_all_backbone_workflow(
         }
 
     def execute_all(state: UpgradeGraphState) -> UpgradeGraphState:
-        result = run_loop(
-            StageLoopRequest(
-                stage="execute_all",
-                system_prompt=UPGRADE_ALL,
-                task=_batch_execute_task(state),
-                enforce_baseline_guardrail=True,
+        queue = state.get("queue") or UpgradeQueue()
+        current_state = {**state, "queue": queue}
+        last_result = state.get("execute_result")
+
+        for index, item in enumerate(queue.pending(), start=1):
+            package_state = {
+                **current_state,
+                "current_dependency": item.name,
+            }
+            execute_result = run_loop(
+                StageLoopRequest(
+                    stage="execute_package",
+                    system_prompt=UPGRADE,
+                    task=_batch_execute_package_task(
+                        item,
+                        index,
+                        len(queue.packages),
+                        package_state,
+                    ),
+                    enforce_baseline_guardrail=True,
+                )
             )
-        )
-        return {**state, "execute_result": result, "final_result": result}
+            verify_result = run_loop(
+                StageLoopRequest(
+                    stage="verify_package",
+                    system_prompt=BASE_AGENT,
+                    task=_batch_verify_package_task(item, execute_result),
+                )
+            )
+            package_verification = _verification_from_result(verify_result)
+            if package_verification.ok:
+                item.status = "done"
+                item.reason = None
+            else:
+                item.status = "failed"
+                item.reason = package_verification.summary
+
+            last_result = verify_result
+            current_state = {
+                **package_state,
+                "queue": queue,
+                "execute_result": execute_result,
+                "verify_result": verify_result,
+                "final_result": verify_result,
+            }
+
+        return {
+            **current_state,
+            "queue": queue,
+            "verify_result": last_result,
+            "final_result": last_result,
+        }
 
     def verify(state: UpgradeGraphState) -> UpgradeGraphState:
         result = run_loop(
@@ -366,7 +410,12 @@ def _batch_queue_task() -> str:
     )
 
 
-def _batch_execute_task(state: UpgradeGraphState) -> str:
+def _batch_execute_package_task(
+    item: UpgradeQueueItem,
+    index: int,
+    total: int,
+    state: UpgradeGraphState,
+) -> str:
     queue = state.get("queue")
     queue_summary = (
         "\n".join(
@@ -377,16 +426,32 @@ def _batch_execute_task(state: UpgradeGraphState) -> str:
         if queue
         else "(no structured queue)"
     )
+    package_target = (
+        f"{item.name}: {item.current_version or '?'} -> {item.target_version or 'latest'} "
+        f"({item.dependency_type})"
+    )
     return (
-        "Upgrade all direct npm dependencies and devDependencies to their latest "
-        "stable versions.\n\n"
+        f"Upgrade package {index}/{total}: {package_target}.\n\n"
         "Before mutating files, run npm test once in this loop so the runtime "
-        "baseline guardrail observes a green baseline. Then follow the batch "
-        "workflow: upgrade exactly one direct package at a time, verify tests "
-        "after each package, fix only breakages caused by that package, and if "
-        "one package cannot be fixed safely, revert that package and continue. "
-        "Finish with a final npm test and git diff review.\n\n"
+        "baseline guardrail observes a green baseline. Then upgrade only this "
+        "direct package to the target/latest stable version, update the lockfile "
+        "if needed, and fix only breakages caused by this package. Do not upgrade "
+        "any other package intentionally. If this package cannot be fixed safely, "
+        "revert only this package's attempted changes and report the blocker.\n\n"
         f"Queue summary:\n{queue_summary}"
+    )
+
+
+def _batch_verify_package_task(item: UpgradeQueueItem, execute_result: LoopResult) -> str:
+    return (
+        f"Verify the package upgrade independently: {item.name}.\n\n"
+        "Run the project's test command, read the actual output, inspect git diff, "
+        "and decide whether this package's upgrade can be kept. Do not make edits "
+        "in this verification pass. Return exactly one JSON object with this shape: "
+        '{"ok": true|false, "command": "npm test", "summary": "...", '
+        '"passing_count": 28|null}. If verification fails, include the exact '
+        "failing command/output and whether this package should be reverted.\n\n"
+        f"Package execution summary:\n{execute_result.final_text}"
     )
 
 

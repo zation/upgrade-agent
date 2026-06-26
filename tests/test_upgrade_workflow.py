@@ -125,11 +125,19 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
                       "current_version": "4.0.0",
                       "target_version": "11.0.0",
                       "dependency_type": "devDependency"
+                    },
+                    {
+                      "name": "chai",
+                      "current_version": "4.3.0",
+                      "target_version": "5.1.0",
+                      "dependency_type": "dependency"
                     }
                   ]
                 }
                 """
             )
+        if request.stage == "verify_package":
+            return _result('{"ok": true, "command": "npm test", "summary": "package passed"}')
         if request.stage == "verify":
             return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
         return _result("stage complete")
@@ -151,7 +159,10 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert [request.stage for request in requests] == [
         "baseline",
         "queue",
-        "execute_all",
+        "execute_package",
+        "verify_package",
+        "execute_package",
+        "verify_package",
         "verify",
     ]
     assert requests[0].read_only is False
@@ -160,9 +171,12 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert '"packages"' in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
     assert "mocha" in requests[2].task
-    assert "exactly one direct package at a time" in requests[2].task
-    assert '"ok"' in requests[3].task
+    assert "Do not upgrade any other package intentionally" in requests[2].task
+    assert "mocha" in requests[3].task
+    assert "chai" in requests[4].task
+    assert '"ok"' in requests[6].task
     assert result.state["queue"].packages[0].name == "mocha"
+    assert [item.status for item in result.state["queue"].packages] == ["done", "done"]
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
@@ -177,6 +191,8 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
                 '{"packages": [{"name": "mocha", "current_version": "4.0.0", '
                 '"target_version": "11.0.0", "dependency_type": "devDependency"}]}'
             )
+        if request.stage == "verify_package":
+            return _result('{"ok": true, "command": "npm test", "summary": "package passed"}')
         if request.stage == "verify":
             verify_calls += 1
             if verify_calls == 1:
@@ -194,10 +210,11 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     assert [request.stage for request in requests] == [
         "baseline",
         "queue",
-        "execute_all",
+        "execute_package",
+        "verify_package",
         "verify",
         "heal",
         "verify",
     ]
-    assert requests[4].enforce_baseline_guardrail is True
-    assert "batch upgrade" in requests[4].task
+    assert requests[5].enforce_baseline_guardrail is True
+    assert "batch upgrade" in requests[5].task

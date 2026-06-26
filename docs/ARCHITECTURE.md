@@ -125,6 +125,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - 批量 queue 节点只读生成结构化 direct dependency 升级队列。
 - plan 节点生成最小升级计划。
 - execute 节点执行升级。
+- 批量 execute 节点按结构化 queue 逐个 package 派发 `execute_package` / `verify_package`。
 - verify 节点独立验证结果。
 - verify 失败时进入 heal 节点。
 - report 节点汇总最终结果。
