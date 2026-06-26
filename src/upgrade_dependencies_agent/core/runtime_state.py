@@ -63,6 +63,24 @@ def mutation_scope_guardrail(
     )
 
 
+def dangerous_revert_guardrail(call: ToolUseBlock) -> ToolResult | None:
+    """Block broad git revert commands that could discard unrelated user work."""
+    if call.name != "run_command":
+        return None
+    command = str(call.input.get("command", ""))
+    if not _looks_like_dangerous_revert(command):
+        return None
+    return ToolResult(
+        output=(
+            "Tool call blocked by runtime guardrail: dangerous revert command. "
+            "Use a structured package-level revert path instead of broad git "
+            "reset/checkout/restore commands."
+        ),
+        is_error=True,
+        metadata={"guardrail": "dangerous_revert_command", "command": command},
+    )
+
+
 def update_runtime_state(call: ToolUseBlock, result: ToolResult, state: RuntimeState) -> None:
     """Update state from tool results after a call executes."""
     if call.name != "run_command":
@@ -87,6 +105,16 @@ def _looks_like_test_command(command: str) -> bool:
             r"\b(npm\s+(test|t|run\s+test)|pnpm\s+test|yarn\s+test)\b",
             command,
         )
+    )
+
+
+def _looks_like_dangerous_revert(command: str) -> bool:
+    normalized = " ".join(command.strip().split())
+    return bool(
+        re.search(r"\bgit\s+reset\s+--hard\b", normalized)
+        or re.search(r"\bgit\s+checkout\s+(--\s+)?(\.|:/)\b", normalized)
+        or re.search(r"\bgit\s+restore\s+(\.|:/)\b", normalized)
+        or re.search(r"\bgit\s+clean\s+-[^\s]*[dfx][^\s]*\b", normalized)
     )
 
 

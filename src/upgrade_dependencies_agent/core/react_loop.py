@@ -38,6 +38,7 @@ from .llm_client import LLMClient, LLMResponse
 from .runtime_state import (
     RuntimeState,
     baseline_guardrail,
+    dangerous_revert_guardrail,
     mutation_scope_guardrail,
     update_runtime_state,
 )
@@ -259,6 +260,15 @@ class ReActLoop:
                     guardrail=blocked.metadata.get("guardrail"),
                 )
                 return blocked
+        blocked = dangerous_revert_guardrail(call)
+        if blocked is not None:
+            tracer.event(
+                "tool_call",
+                name=call.name,
+                phase="guardrail_blocked",
+                guardrail=blocked.metadata.get("guardrail"),
+            )
+            return blocked
         blocked = mutation_scope_guardrail(call, self.config.allowed_files)
         if blocked is not None:
             tracer.event(

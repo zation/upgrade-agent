@@ -25,7 +25,7 @@
 | LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
 | 自修复边 | `upgrade` / `upgrade-all` 的 verify → heal | ✅ v1 |
 | 确定性 eval | `evals/runner.py` | ✅ v1 |
-| 结构化输出与 runtime guardrails | Roadmap M8 | ⏳ |
+| 结构化输出与 runtime guardrails | `core/structured.py`、`core/runtime_state.py` | ✅ v1 |
 | 深度 RAG | Roadmap M10 | ⏳ |
 
 ## 分层模型
@@ -132,6 +132,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - heal 次数受 `max_heal_attempts` 限制。
 - mutation stage 会把当前 dependency 和允许修改文件传入 runtime config。
 - runtime guardrail 会拒绝超出 `allowed_files` 的显式文件写入或编辑。
+- runtime guardrail 会拒绝危险全局 revert 命令。
 - CLI stage runner 会在第一次 mutation stage 前检查 target worktree，已有改动时停止。
 - 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
 

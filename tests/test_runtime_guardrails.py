@@ -200,3 +200,51 @@ def test_allowed_files_guardrail_allows_file_mutation_inside_scope(
 
     assert result.ok
     assert (tmp_path / "package.json").read_text(encoding="utf-8") == "{}"
+
+
+def test_revert_guardrail_blocks_dangerous_git_reset_after_green_baseline(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("run_command", {"command": "git reset --hard HEAD"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then dangerous reset")
+
+    assert result.ok
+    assert "dangerous revert command" in _last_tool_result_content(result)
+
+
+def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("run_command", {"command": "git diff --name-only"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then diff")
+
+    assert result.ok
+    assert "$ git diff --name-only" in _last_tool_result_content(result)

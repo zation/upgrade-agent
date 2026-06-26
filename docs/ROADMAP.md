@@ -286,14 +286,16 @@
   - [x] stage request / agent config 已携带当前正在升级的 dependency。
   - [x] stage request / agent config 已携带本轮允许修改的文件范围。
   - [x] runtime guardrail 已使用 `allowed_files` 限制 `write_file` / `edit_file` 范围。
-  - [ ] runtime guardrail 进一步约束命令型 mutation 的影响范围。
+  - [x] runtime guardrail 已禁止危险全局 revert 命令。
+  - [ ] runtime guardrail 进一步约束其他命令型 mutation 的影响范围。
 - [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
   - 文件 mutation 超出 `allowed_files` 时直接拦截。
   - 第一次 mutation stage 前检测 target worktree 是否已有改动，dirty 时直接停止。
+  - 禁止 `git reset --hard`、`git checkout .`、`git restore .` 等危险全局 revert。
 - [ ] tool guardrails 后续：
   - 将 dirty target 检测从 CLI stage runner 下沉为更通用的 workflow/runtime preflight。
-  - 禁止危险 revert；只允许 revert 本次修改过的文件。
+  - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
 - [ ] eval runner 增加 structured report check。
 
 **验收标准**
