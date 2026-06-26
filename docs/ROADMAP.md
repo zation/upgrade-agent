@@ -137,8 +137,9 @@ release-note sources；`research-upgrade` 已作为只读 breaking-change resear
 - [x] 加通用 `trace_sequence` check：从 JSONL trace 判断关键 tool/command 是否按顺序出现。
 - [ ] 增加专用 trajectory policies：判断是否先 baseline、是否一包一包升级、
   是否读取真实失败输出、是否产生越权/无关修改。
-- [ ] 失败分类：`baseline_missing`、`test_failed`、`wrong_diff`、`timeout`、`llm_error`、
-  `trajectory_violation`，方便比较优化前后。
+- [x] 基础失败分类：`test_failed`、`wrong_diff`、`timeout`、`llm_error`、
+  `trajectory_violation`、`postcondition_failed` 等，方便比较优化前后。
+- [ ] 在专用 trajectory policies 中补充 `baseline_missing` 等流程违规分类。
 - [ ] 可选 LLM-as-judge：只评价报告质量、风险解释、source coverage；核心 pass/fail 仍靠脚本。
 
 ### M5.2 CLI 打磨

@@ -96,6 +96,7 @@ def test_run_case_reports_failing_check(tmp_path: Path) -> None:
     result = run_case(load_case(case_path), workspace=tmp_path / "work")
 
     assert not result.ok
+    assert result.failure_reason == "postcondition_failed"
     assert result.checks[0].name == "package_json_version:mocha"
     assert "expected >=11.0.0" in result.checks[0].message
 
@@ -189,6 +190,7 @@ def test_run_case_timeout_is_reported_as_failure(tmp_path: Path) -> None:
     result = run_case(load_case(case_path), workspace=tmp_path / "work")
 
     assert not result.ok
+    assert result.failure_reason == "timeout"
     assert result.command_exit_code == 124
     assert result.checks[0].name == "case_command"
     assert "timed out after 1s" in result.checks[0].message
@@ -382,5 +384,32 @@ def test_trace_sequence_check_reports_missing_event(tmp_path: Path) -> None:
     result = run_case(load_case(case_path), workspace=tmp_path / "work")
 
     assert not result.ok
+    assert result.failure_reason == "trajectory_violation"
     assert result.checks[0].name == "trace_sequence:trace.jsonl"
     assert "missing sequence item 1" in result.checks[0].message
+
+
+def test_failure_reason_classifies_wrong_diff(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "wrong diff",
+                "target": str(target),
+                "command": (
+                    "python -c \"from pathlib import Path; Path('extra.txt').write_text('x')\""
+                ),
+                "checks": [{"type": "git_diff", "allowed_paths": ["package.json"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "wrong_diff"

@@ -47,6 +47,7 @@ class EvalResult:
     command_exit_code: int
     checks: list[CheckResult]
     teardown_exit_codes: list[int]
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,7 @@ def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
         command_exit_code=proc.returncode,
         checks=checks,
         teardown_exit_codes=[result.returncode for result in teardown_results],
+        failure_reason=_classify_failure(proc.returncode, checks),
     )
 
 
@@ -180,6 +182,7 @@ def result_to_dict(result: EvalResult) -> dict[str, Any]:
         "workdir": str(result.workdir),
         "command_exit_code": result.command_exit_code,
         "teardown_exit_codes": result.teardown_exit_codes,
+        "failure_reason": result.failure_reason,
         "checks": [
             {"name": check.name, "ok": check.ok, "message": check.message}
             for check in result.checks
@@ -317,14 +320,19 @@ def _check_command(check: dict[str, Any], workdir: Path, *, env: dict[str, str])
 
 def _check_git_diff(check: dict[str, Any], workdir: Path) -> CheckResult:
     allowed = set(check.get("allowed_paths", []))
-    proc = _run(["git", "diff", "--name-only"], workdir)
-    changed = {line for line in proc.stdout.splitlines() if line.strip()}
+    proc = _run(["git", "status", "--porcelain"], workdir)
+    changed = {_status_path(line) for line in proc.stdout.splitlines() if line.strip()}
     unexpected = sorted(changed - allowed)
     ok = not unexpected
     message = f"changed={sorted(changed)}"
     if unexpected:
         message = f"unexpected changed paths={unexpected}; {message}"
     return CheckResult(name="git_diff", ok=ok, message=message)
+
+
+def _status_path(line: str) -> str:
+    # `git status --porcelain` uses two status columns, a space, then path.
+    return line[3:].strip()
 
 
 def _check_trace_sequence(check: dict[str, Any], workdir: Path) -> CheckResult:
@@ -429,6 +437,29 @@ def _command_message(proc: subprocess.CompletedProcess[str]) -> str:
     if output:
         message = f"{message}; {output[-500:]}"
     return message
+
+
+def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
+    if exit_code == 0 and all(check.ok for check in checks):
+        return None
+    failing = next((check for check in checks if not check.ok), None)
+    message = (failing.message if failing else "").lower()
+    name = failing.name if failing else "case_command"
+    if exit_code == 124 or "timed out" in message:
+        return "timeout"
+    if name.startswith("trace_sequence"):
+        return "trajectory_violation"
+    if name == "git_diff":
+        return "wrong_diff"
+    if name.startswith("command:"):
+        return "test_failed"
+    if name == "case_setup":
+        return "setup_failed"
+    if name == "case_command":
+        if "llm" in message or "api" in message:
+            return "llm_error"
+        return "command_failed"
+    return "postcondition_failed"
 
 
 def _satisfies(actual: str, expected: str) -> bool:

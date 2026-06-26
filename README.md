@@ -95,7 +95,7 @@ The first eval harness does not use an LLM judge. It runs the case command, then
 checks objective postconditions such as `package.json` dependency versions,
 test-command success, and whether the changed paths stay inside an allowed set.
 Cases can also declare timeout, environment variables, setup/teardown commands,
-and expected budget metadata.
+expected budget metadata, and emit deterministic failure reasons in JSON output.
 
 ## Project layout
 
