@@ -16,7 +16,7 @@
 |-----------|------|------|----------|
 | M1 | ✅ | Agent Core v1 | 手写 ReAct loop、工具协议、路径安全、trace 已完成 |
 | M2 | ✅ | 单依赖升级 v1 | `upgrade` 已能完成真实单依赖升级闭环 |
-| M3 | ✅ | 批量升级与薄 LangGraph 编排 v1 | `upgrade-all` 与早期薄 graph 示例已完成 |
+| M3 | ✅ | 批量升级与 LangGraph 编排 v1 | `upgrade-all` 与早期 graph 示例已完成；后续已在 M8 收敛 |
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
@@ -90,7 +90,7 @@
 
 ---
 
-## M3：批量升级与薄 LangGraph 编排 v1
+## M3：批量升级与 LangGraph 编排 v1
 
 **状态**：✅ 已完成
 
@@ -100,9 +100,9 @@
 
 - [x] `upgrade-all` CLI：按 direct dependency 逐个升级的 workflow 已落地。
 - [x] `UPGRADE_ALL` prompt：包含 baseline、queue、per-package verify、final verify。
-- [x] `orchestrator/upgrade_graph.py`：薄 LangGraph workflow。
-- [x] 早期 `upgrade-graph` CLI：execute → verify → self-heal → verify。
-- [x] `tests/test_upgrade_graph.py`：覆盖 verify pass、verify fail → heal、heal budget 等路径。
+- [x] 早期 thin graph workflow：execute → verify → self-heal → verify。
+- [x] 早期 graph tests：覆盖 verify pass、verify fail → heal、heal budget 等路径。
+- [x] M8 已将旧 thin graph 收敛到 `upgrade_backbone.py` / `upgrade_workflow.py`，并删除重复实现。
 
 **不再放在 M3 的内容**
 

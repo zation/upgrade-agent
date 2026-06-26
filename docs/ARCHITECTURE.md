@@ -116,8 +116,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 ## LangGraph 编排
 
 `orchestrator/upgrade_backbone.py` 和 `orchestrator/upgrade_workflow.py`
-当前承载单依赖与批量升级的 LangGraph backbone；`orchestrator/upgrade_graph.py`
-保留旧 thin graph 实现，主要用于对照测试。
+当前承载单依赖与批量升级的 LangGraph backbone。
 
 已实现：
 

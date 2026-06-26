@@ -17,7 +17,6 @@ from .state import (
     make_upgrade_graph_state,
 )
 from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
-from .upgrade_graph import GraphRunResult, UpgradeGraphRunner
 from .upgrade_workflow import (
     StageLoopRequest,
     run_upgrade_all_backbone_workflow,
@@ -27,12 +26,10 @@ from .upgrade_workflow import (
 __all__ = [
     "AgentReport",
     "BaselineState",
-    "GraphRunResult",
     "ResearchBrief",
     "StageLoopRequest",
     "UpgradeBackboneResult",
     "UpgradeBackboneRunner",
-    "UpgradeGraphRunner",
     "UpgradeGraphState",
     "UpgradePlan",
     "VerificationResult",
