@@ -13,9 +13,10 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 
 ## Status
 
-- **M1–M2 ✅** — ReAct core and real single-dependency upgrades are complete.
-- **M3–M5 🚧** — orchestration, RAG/research, evals, and CLI polish are in progress.
-- **M6 ✅** — add-tests workflow v1 is complete (`analyze-coverage`, `generate-tests`).
+- **M1–M6 ✅** — core agent, single/batch upgrades, research tools, evals, and
+  add-tests workflow all have usable v1 implementations.
+- **M7+ ⏳** — next work focuses on prompt/skill quality, runtime guardrails,
+  cost/context optimization, deeper RAG, and CLI/UX polish.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the canonical milestone status and
 next implementation order.
