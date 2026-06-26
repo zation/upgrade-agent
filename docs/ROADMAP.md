@@ -21,7 +21,7 @@
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
-| M8 | 🚧 | 结构化状态与运行时 Guardrails | baseline-before-mutation guardrail v1 已开始落地 |
+| M8 | 🚧 | LangGraph Backbone、结构化状态与运行时 Guardrails | Graph state / artifacts 优先，baseline guardrail v1 已落地 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -243,7 +243,7 @@
 
 ---
 
-## M8：结构化状态与运行时 Guardrails
+## M8：LangGraph Backbone、结构化状态与运行时 Guardrails
 
 **状态**：🚧 进行中
 
@@ -251,12 +251,19 @@
 
 **计划**
 
-- [ ] `core/structured.py`：封装 Claude / OpenAI-compatible 的 JSON / structured output。
-- [ ] 定义核心 schema：
+- [x] Graph state / artifact schema v1：
+  - `BaselineState`
+  - `ResearchBrief`
   - `UpgradePlan`
   - `VerificationResult`
   - `AgentReport`
-  - `ResearchBrief`
+  - `UpgradeGraphState`
+- [ ] LangGraph backbone v1：
+  - baseline → research → plan → execute → verify → report。
+  - verify fail → self-heal → verify，限制次数。
+  - 每个阶段输出结构化 artifact。
+- [ ] `core/structured.py`：封装 Claude / OpenAI-compatible 的 JSON / structured output，
+  让 graph node 能稳定产出上述 artifact schema。
 - [x] runtime state v1：
   - baseline 是否已跑。
   - baseline 是否 green。
@@ -268,10 +275,6 @@
 - [ ] tool guardrails 后续：
   - 检测 dirty target，避免覆盖用户已有改动。
   - 禁止危险 revert；只允许 revert 本次修改过的文件。
-- [ ] 完整 graph 优化：
-  - analyze → research → plan → execute → verify → report。
-  - verify fail → self-heal → verify，限制次数。
-  - 每个阶段输出结构化 artifact。
 - [ ] eval runner 增加 structured report check。
 
 **验收标准**

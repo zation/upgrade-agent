@@ -9,28 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 
 from ..core import LoopResult
-
-GraphPhase = Literal["execute", "verify", "heal", "done"]
-
-
-class UpgradeGraphState(TypedDict, total=False):
-    """Mutable state carried through the upgrade graph."""
-
-    task: str
-    execute_result: LoopResult | None
-    verify_result: LoopResult | None
-    heal_result: LoopResult | None
-    final_result: LoopResult | None
-    heal_attempts: int
-    max_heal_attempts: int
-    needs_heal: bool
-    phase: GraphPhase
-    history: list[str]
+from .state import UpgradeGraphState, make_upgrade_graph_state
 
 
 @dataclass(frozen=True)
@@ -67,18 +50,11 @@ class UpgradeGraphRunner:
         """Run the compiled graph and return a compact result."""
         app = self._compile()
         state = app.invoke(
-            {
-                "task": task,
-                "execute_result": None,
-                "verify_result": None,
-                "heal_result": None,
-                "final_result": None,
-                "heal_attempts": 0,
-                "max_heal_attempts": self.max_heal_attempts,
-                "needs_heal": False,
-                "phase": "execute",
-                "history": [],
-            }
+            make_upgrade_graph_state(
+                task,
+                max_heal_attempts=self.max_heal_attempts,
+                phase="execute",
+            )
         )
         final_result = state.get("final_result")
         verify_result = state.get("verify_result")
