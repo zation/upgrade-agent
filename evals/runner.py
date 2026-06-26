@@ -288,6 +288,8 @@ def _run_check(check: dict[str, Any], workdir: Path, *, env: dict[str, str]) -> 
         return _check_trace_sequence(check, workdir)
     if check_type == "trajectory_policy":
         return _check_trajectory_policy(check, workdir)
+    if check_type == "structured_report":
+        return _check_structured_report(check, workdir)
     return CheckResult(name=str(check_type or "unknown"), ok=False, message="unknown check type")
 
 
@@ -336,6 +338,71 @@ def _check_git_diff(check: dict[str, Any], workdir: Path) -> CheckResult:
 def _status_path(line: str) -> str:
     # `git status --porcelain` uses two status columns, a space, then path.
     return line[3:].strip()
+
+
+def _check_structured_report(check: dict[str, Any], workdir: Path) -> CheckResult:
+    report_path = Path(check["path"])
+    full = report_path if report_path.is_absolute() else workdir / report_path
+    name = f"structured_report:{report_path.as_posix()}"
+    if not full.exists():
+        return CheckResult(name=name, ok=False, message=f"report file not found: {report_path}")
+    try:
+        report = json.loads(full.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return CheckResult(name=name, ok=False, message=f"invalid report JSON: {e}")
+    shape_error = _agent_report_shape_error(report)
+    if shape_error:
+        return CheckResult(name=name, ok=False, message=shape_error)
+
+    expected_ok = check.get("ok")
+    if expected_ok is not None and report["ok"] != bool(expected_ok):
+        return CheckResult(
+            name=name,
+            ok=False,
+            message=f"ok={report['ok']}; expected {bool(expected_ok)}",
+        )
+
+    changed_files = set(report["changed_files"])
+    allowed_changed = set(check.get("allowed_changed_files", []))
+    if allowed_changed:
+        unexpected = sorted(changed_files - allowed_changed)
+        if unexpected:
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"unexpected changed files={unexpected}; changed={sorted(changed_files)}",
+            )
+
+    if check.get("allow_remaining_risks") is False and report["remaining_risks"]:
+        return CheckResult(
+            name=name,
+            ok=False,
+            message=f"remaining risks present: {report['remaining_risks']}",
+        )
+
+    return CheckResult(
+        name=name,
+        ok=True,
+        message=f"ok={report['ok']}; changed_files={sorted(changed_files)}",
+    )
+
+
+def _agent_report_shape_error(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return "report must be a JSON object"
+    if not isinstance(value.get("ok"), bool):
+        return "report.ok must be a boolean"
+    if not isinstance(value.get("summary"), str):
+        return "report.summary must be a string"
+    if not _is_string_list(value.get("changed_files")):
+        return "report.changed_files must be a list of strings"
+    if not _is_string_list(value.get("remaining_risks")):
+        return "report.remaining_risks must be a list of strings"
+    return None
+
+
+def _is_string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
 def _check_trace_sequence(check: dict[str, Any], workdir: Path) -> CheckResult:
@@ -583,6 +650,8 @@ def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
         return "trajectory_violation"
     if name == "git_diff":
         return "wrong_diff"
+    if name.startswith("structured_report:"):
+        return "structured_report_failed"
     if name.startswith("command:"):
         return "test_failed"
     if name == "case_setup":

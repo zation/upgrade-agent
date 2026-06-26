@@ -158,6 +158,7 @@
   - `command`
   - `git_diff`
   - `trace_sequence`
+  - `structured_report`
   - `trajectory_policy: baseline_before_mutation`
   - `trajectory_policy: single_dependency_at_a_time`
 - [x] failure reason：
@@ -296,7 +297,9 @@
 - [ ] tool guardrails 后续：
   - 将 dirty target 检测从 CLI stage runner 下沉为更通用的 workflow/runtime preflight。
   - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
-- [ ] eval runner 增加 structured report check。
+- [x] eval runner 已增加 `structured_report` check：
+  - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
+  - 真实 eval case 接入等待 CLI / workflow 输出 report 文件。
 
 **验收标准**
 

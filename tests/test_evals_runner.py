@@ -583,3 +583,93 @@ def test_single_dependency_policy_fails_for_multiple_install_targets(tmp_path: P
     assert result.failure_reason == "multi_dependency_upgrade"
     assert result.checks[0].name == "trajectory_policy:single_dependency_at_a_time"
     assert "multiple install targets" in result.checks[0].message
+
+
+def test_structured_report_check_validates_agent_report_shape(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "structured report",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "import json, pathlib; "
+                        "pathlib.Path('report.json').write_text(json.dumps({"
+                        "'ok': True, "
+                        "'summary': 'upgrade passed', "
+                        "'changed_files': ['package.json'], "
+                        "'remaining_risks': []"
+                        "}))"
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "structured_report",
+                        "path": "report.json",
+                        "ok": True,
+                        "allowed_changed_files": ["package.json"],
+                        "allow_remaining_risks": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.checks[0].name == "structured_report:report.json"
+    assert "ok=True" in result.checks[0].message
+
+
+def test_structured_report_check_reports_unexpected_changed_files(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "structured report failure",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "import json, pathlib; "
+                        "pathlib.Path('report.json').write_text(json.dumps({"
+                        "'ok': True, "
+                        "'summary': 'upgrade passed', "
+                        "'changed_files': ['src/index.js'], "
+                        "'remaining_risks': []"
+                        "}))"
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "structured_report",
+                        "path": "report.json",
+                        "ok": True,
+                        "allowed_changed_files": ["package.json"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "structured_report_failed"
+    assert result.checks[0].name == "structured_report:report.json"
+    assert "unexpected changed files" in result.checks[0].message

@@ -167,11 +167,12 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - `command`
 - `git_diff`
 - `trace_sequence`
+- `structured_report`
 - `trajectory_policy: baseline_before_mutation`
 - `trajectory_policy: single_dependency_at_a_time`
 - failure reason：`timeout`、`wrong_diff`、`test_failed`、`llm_error`、
   `postcondition_failed`、`trajectory_violation`、`baseline_missing`、
-  `multi_dependency_upgrade`
+  `multi_dependency_upgrade`、`structured_report_failed`
 
 后续 eval 扩展见 Roadmap M8-M11。
 
