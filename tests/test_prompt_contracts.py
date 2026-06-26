@@ -53,3 +53,15 @@ def test_shared_contracts_render_with_consistent_heading_and_bullets() -> None:
     assert f"- {BASELINE_RULE}" in section
     assert f"- {VERIFY_RULE}" in section
     assert section.endswith("\n\n")
+
+
+def test_upgrade_prompts_do_not_repeat_contract_rules_in_legacy_rules_section() -> None:
+    duplicated_legacy_rules = [
+        "Never skip the test baseline",
+        "Never claim success without reading the ACTUAL",
+        'Never refactor unrelated code "while you\'re there"',
+    ]
+
+    for rule in duplicated_legacy_rules:
+        assert rule not in UPGRADE
+        assert rule not in UPGRADE_ALL

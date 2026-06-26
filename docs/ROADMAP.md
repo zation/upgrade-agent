@@ -215,6 +215,7 @@
     read-only rule、source-evidence rule、test-style rule。
   - task prompt 已通过统一 helper 显式引用共享 contracts。
 - [ ] 继续瘦身 prompt：
+  - 已删除 `upgrade` / `upgrade-all` 中被共享 contracts 覆盖的重复 legacy rules。
   - `BASE_AGENT` 只保留全局原则。
   - task prompt 只描述本任务策略、输出格式和少量特殊规则。
 - [ ] 清理 prompt 与 runtime 的职责边界：

@@ -201,12 +201,7 @@ chance to catch mistakes.
     - **Warnings/concerns**: any remaining deprecations or issues
 
 ### Rules (break these and you fail the task)
-- Never skip the test baseline. Without knowing what "green" looks like, you \
-cannot judge the outcome.
-- Never claim success without reading the ACTUAL test output. "exit 0" is not \
-enough — read and compare the passing test counts.
 - Never make multiple unrelated fixes in a single step. One fix, one test run.
-- Never refactor unrelated code "while you're there". Stay focused.
 - If npm install produces ERESOLVE errors, try --legacy-peer-deps as a last \
 resort, but note it clearly in the report.
 - If you cannot fix after 5 honest attempts, REVERT all changes and report \
@@ -271,11 +266,8 @@ actual output. Compare the final passing count to the baseline.
     - **Warnings/concerns**: remaining deprecations, peer warnings, or manual checks
 
 ### Rules (break these and you fail the task)
-- Never skip the test baseline. Without knowing what "green" looks like, you \
-cannot judge the outcome.
 - Never upgrade multiple packages in one step unless npm itself updates \
 transitive lockfile entries.
-- Never claim success without reading the ACTUAL final test output.
 - Never refactor unrelated code. Only fix breakages caused by the current \
 package upgrade.
 - Prefer completing a safe subset over leaving the project broken. If a package \
