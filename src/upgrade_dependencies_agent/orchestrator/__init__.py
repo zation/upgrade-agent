@@ -16,6 +16,7 @@ from .state import (
     VerificationResult,
     make_upgrade_graph_state,
 )
+from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
 from .upgrade_graph import GraphRunResult, UpgradeGraphRunner
 
 __all__ = [
@@ -23,6 +24,8 @@ __all__ = [
     "BaselineState",
     "GraphRunResult",
     "ResearchBrief",
+    "UpgradeBackboneResult",
+    "UpgradeBackboneRunner",
     "UpgradeGraphRunner",
     "UpgradeGraphState",
     "UpgradePlan",
