@@ -114,7 +114,10 @@ class FetchReleases(ToolImpl):
         try:
             r = httpx.get(
                 url,
-                headers={"Accept": "application/vnd.github+json", "User-Agent": "refactor-agent"},
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "upgrade-dependencies-agent",
+                },
                 timeout=_REQUEST_TIMEOUT,
             )
         except httpx.HTTPError as e:
@@ -194,7 +197,7 @@ class FetchUrl(ToolImpl):
         try:
             r = httpx.get(
                 url,
-                headers={"User-Agent": "refactor-agent/0.1"},
+                headers={"User-Agent": "upgrade-dependencies-agent/0.1"},
                 timeout=_REQUEST_TIMEOUT,
                 follow_redirects=True,
             )

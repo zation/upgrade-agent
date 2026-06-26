@@ -1,13 +1,13 @@
 """CLI entrypoint.
 
-    uv run refactor-agent analyze ../some-project
-    uv run refactor-agent analyze-coverage ../some-project
-    uv run refactor-agent generate-tests ../some-project "cover src/foo edge cases"
-    uv run refactor-agent research-upgrade ../some-project "mocha 4 -> 11"
-    uv run refactor-agent upgrade ../some-project "mocha 4 -> 11"
-    uv run refactor-agent upgrade-graph ../some-project "mocha 4 -> 11"
-    uv run refactor-agent upgrade-all ../some-project
-    uv run refactor-agent ask ../some-project "any free-form task"
+    uv run upgrade-dependencies-agent analyze ../some-project
+    uv run upgrade-dependencies-agent analyze-coverage ../some-project
+    uv run upgrade-dependencies-agent generate-tests ../some-project "cover src/foo edge cases"
+    uv run upgrade-dependencies-agent research-upgrade ../some-project "mocha 4 -> 11"
+    uv run upgrade-dependencies-agent upgrade ../some-project "mocha 4 -> 11"
+    uv run upgrade-dependencies-agent upgrade-graph ../some-project "mocha 4 -> 11"
+    uv run upgrade-dependencies-agent upgrade-all ../some-project
+    uv run upgrade-dependencies-agent ask ../some-project "any free-form task"
 
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
@@ -65,7 +65,7 @@ def _default_model() -> str:
 
 
 app = typer.Typer(
-    name="refactor-agent",
+    name="upgrade-dependencies-agent",
     help="A ReAct + LangGraph agent for upgrading legacy JS/TS projects.",
     no_args_is_help=True,
 )

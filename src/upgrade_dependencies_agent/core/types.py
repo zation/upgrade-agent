@@ -1,7 +1,7 @@
 """Core types for the agent framework.
 
 Kept deliberately model-agnostic and task-agnostic. The only place that knows
-about Anthropic's wire format is :mod:`refactor_agent.core.llm_client`; everything
+about Anthropic's wire format is :mod:`upgrade_dependencies_agent.core.llm_client`; everything
 else (the ReAct loop, tools, traces) operates on the neutral types defined here.
 """
 

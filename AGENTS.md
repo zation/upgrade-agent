@@ -5,7 +5,7 @@
 
 ## What this project is
 
-`refactor-agent` is a ReAct + LangGraph AI agent that **upgrades dependencies**
+`upgrade-dependencies-agent` is a ReAct + LangGraph AI agent that **upgrades dependencies**
 and **adds tests** for legacy JS/TS projects. It is written in Python, calls an
 LLM (Anthropic Claude or any OpenAI-compatible API such as DeepSeek), and
 operates on a *target* project (e.g. `chai-like`) checked out elsewhere on disk.
@@ -52,18 +52,18 @@ uv run ruff check . && uv run ruff format --check .
 uv run pytest -v
 
 # run the agent against a target project (needs .env with LLM_API_KEY)
-uv run refactor-agent analyze   /Users/liuyang/Projects/chai-like
-uv run refactor-agent research-upgrade /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade   /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade-graph /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade-all /Users/liuyang/Projects/chai-like
-uv run refactor-agent ask       /Users/liuyang/Projects/chai-like "your task"
+uv run upgrade-dependencies-agent analyze   /Users/liuyang/Projects/chai-like
+uv run upgrade-dependencies-agent research-upgrade /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade   /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-graph /Users/liuyang/Projects/chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-all /Users/liuyang/Projects/chai-like
+uv run upgrade-dependencies-agent ask       /Users/liuyang/Projects/chai-like "your task"
 ```
 
 ## Architecture (the parts that matter)
 
 ```
-src/refactor_agent/
+src/upgrade_dependencies_agent/
   core/        hand-written agent base — MODEL-AGNOSTIC + TASK-AGNOSTIC
   tools/       the agent's tool belt — TASK-SPECIFIC but model-agnostic
   skills/      domain prompts (analyze / upgrade) + later sub-graphs

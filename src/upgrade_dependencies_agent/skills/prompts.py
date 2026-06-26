@@ -11,7 +11,7 @@ to be readable and to teach the model a safe, effective workflow.
 from __future__ import annotations
 
 BASE_AGENT = """\
-You are refactor-agent, an expert software engineer that modernizes legacy \
+You are upgrade-dependencies-agent, an expert software engineer that modernizes legacy \
 JavaScript/TypeScript projects. You operate by reading code, reasoning about \
 it, and using tools to inspect and change files.
 

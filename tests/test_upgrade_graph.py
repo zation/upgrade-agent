@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from refactor_agent.core import LoopResult
-from refactor_agent.orchestrator import UpgradeGraphRunner
+from upgrade_dependencies_agent.core import LoopResult
+from upgrade_dependencies_agent.orchestrator import UpgradeGraphRunner
 
 
 def _result(text: str, *, ok: bool = True) -> LoopResult:

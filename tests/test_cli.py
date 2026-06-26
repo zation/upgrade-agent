@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-import refactor_agent.skills as skills
-from refactor_agent.cli import app
-from refactor_agent.skills import BREAKING_CHANGE_RESEARCHER, UPGRADE_ALL
+import upgrade_dependencies_agent.skills as skills
+from upgrade_dependencies_agent.cli import app
+from upgrade_dependencies_agent.skills import BREAKING_CHANGE_RESEARCHER, UPGRADE_ALL
 
 
 def test_help_lists_upgrade_all_command():
@@ -15,6 +15,7 @@ def test_help_lists_upgrade_all_command():
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
+    assert "upgrade-dependencies-agent" in result.output
     assert "analyze-coverage" in result.output
     assert "generate-tests" in result.output
     assert "research-upgrade" in result.output

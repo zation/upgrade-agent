@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from refactor_agent.core.context import (
+from upgrade_dependencies_agent.core.context import (
     ContextBudget,
     compact_history,
     estimate_tokens,
     needs_compaction,
 )
-from refactor_agent.core.types import Message, TextBlock
+from upgrade_dependencies_agent.core.types import Message, TextBlock
 
 
 def _msgs(n: int) -> list[Message]:

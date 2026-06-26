@@ -1,4 +1,4 @@
-# refactor-agent
+# upgrade-dependencies-agent
 
 A ReAct + LangGraph AI agent that **upgrades dependencies** and **adds tests**
 for legacy JS/TS projects.
@@ -62,14 +62,14 @@ git clone https://github.com/zation/chai-like ../chai-like
 cd ../chai-like && npm install   # establish a working baseline
 
 # 4. Run the agent against it
-uv run refactor-agent analyze ../chai-like
-uv run refactor-agent analyze-coverage ../chai-like
-uv run refactor-agent generate-tests ../chai-like "cover uncovered public APIs"
-uv run refactor-agent research-upgrade ../chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade ../chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade-graph ../chai-like "mocha 4 -> 11"
-uv run refactor-agent upgrade-all ../chai-like
-uv run refactor-agent ask       ../chai-like "any free-form task"
+uv run upgrade-dependencies-agent analyze ../chai-like
+uv run upgrade-dependencies-agent analyze-coverage ../chai-like
+uv run upgrade-dependencies-agent generate-tests ../chai-like "cover uncovered public APIs"
+uv run upgrade-dependencies-agent research-upgrade ../chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade ../chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-graph ../chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade-all ../chai-like
+uv run upgrade-dependencies-agent ask       ../chai-like "any free-form task"
 ```
 
 ## Commands
@@ -90,7 +90,7 @@ Add `--verbose` for full model output, `--model` to override the provider defaul
 ## Project layout
 
 ```
-src/refactor_agent/
+src/upgrade_dependencies_agent/
   core/          hand-written agent base — model-agnostic, task-agnostic
   tools/         fs / shell / git / npm (the agent's tool belt)
   skills/        domain prompts: analyze / upgrade

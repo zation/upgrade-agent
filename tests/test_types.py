@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from refactor_agent.core.types import (
+from upgrade_dependencies_agent.core.types import (
     AgentConfig,
     Message,
     TextBlock,

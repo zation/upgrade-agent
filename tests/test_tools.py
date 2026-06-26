@@ -7,8 +7,8 @@ import os
 
 import pytest
 
-from refactor_agent.core.types import ToolContext
-from refactor_agent.tools._common import PathEscapeError, safe_resolve
+from upgrade_dependencies_agent.core.types import ToolContext
+from upgrade_dependencies_agent.tools._common import PathEscapeError, safe_resolve
 
 
 @pytest.fixture()
@@ -41,7 +41,7 @@ def test_safe_resolve_allows_nested(tmp_path):
 
 
 def test_read_file(ctx):
-    from refactor_agent.tools.fs import ReadFile
+    from upgrade_dependencies_agent.tools.fs import ReadFile
 
     res = ReadFile().run({"path": "src/a.js"}, ctx)
     assert not res.is_error
@@ -50,14 +50,14 @@ def test_read_file(ctx):
 
 
 def test_read_file_missing(ctx):
-    from refactor_agent.tools.fs import ReadFile
+    from upgrade_dependencies_agent.tools.fs import ReadFile
 
     res = ReadFile().run({"path": "nope.js"}, ctx)
     assert res.is_error
 
 
 def test_read_file_escape_blocked(ctx):
-    from refactor_agent.tools.fs import ReadFile
+    from upgrade_dependencies_agent.tools.fs import ReadFile
 
     res = ReadFile().run({"path": "../../../etc/passwd"}, ctx)
     assert res.is_error
@@ -67,7 +67,7 @@ def test_read_file_escape_blocked(ctx):
 
 
 def test_write_then_edit(ctx):
-    from refactor_agent.tools.fs import EditFile, WriteFile
+    from upgrade_dependencies_agent.tools.fs import EditFile, WriteFile
 
     w = WriteFile().run({"path": "src/b.js", "content": "var x = 1;"}, ctx)
     assert not w.is_error
@@ -82,7 +82,7 @@ def test_write_then_edit(ctx):
 
 
 def test_edit_file_ambiguous_rejected(ctx):
-    from refactor_agent.tools.fs import EditFile, WriteFile
+    from upgrade_dependencies_agent.tools.fs import EditFile, WriteFile
 
     WriteFile().run({"path": "src/dup.js", "content": "AAA AAA"}, ctx)
     res = EditFile().run({"path": "src/dup.js", "old_text": "AAA", "new_text": "BBB"}, ctx)
@@ -93,7 +93,7 @@ def test_edit_file_ambiguous_rejected(ctx):
 
 
 def test_grep_finds_usage(ctx):
-    from refactor_agent.tools.fs import Grep
+    from upgrade_dependencies_agent.tools.fs import Grep
 
     res = Grep().run({"pattern": "require"}, ctx)
     assert not res.is_error
@@ -101,7 +101,7 @@ def test_grep_finds_usage(ctx):
 
 
 def test_glob_matches(ctx):
-    from refactor_agent.tools.fs import Glob
+    from upgrade_dependencies_agent.tools.fs import Glob
 
     res = Glob().run({"pattern": "**/*.js"}, ctx)
     assert "src/a.js" in res.output
@@ -111,8 +111,8 @@ def test_glob_matches(ctx):
 
 
 def test_dependency_research_summarizes_registry_metadata(monkeypatch, ctx):
-    from refactor_agent.tools import read_only_tools
-    from refactor_agent.tools.npm import DependencyResearch
+    from upgrade_dependencies_agent.tools import read_only_tools
+    from upgrade_dependencies_agent.tools.npm import DependencyResearch
 
     class FakeResponse:
         status_code = 200
@@ -137,7 +137,7 @@ def test_dependency_research_summarizes_registry_metadata(monkeypatch, ctx):
         assert timeout == 20
         return FakeResponse()
 
-    monkeypatch.setattr("refactor_agent.tools.npm.httpx.get", fake_get)
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.npm.httpx.get", fake_get)
 
     res = DependencyResearch().run({"name": "chai", "current": "^4.0.0"}, ctx)
     data = json.loads(res.output)

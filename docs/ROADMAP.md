@@ -35,13 +35,13 @@
 
 **目标**：把"分析→研究→计划→执行→验证"建模为状态图。
 
-- [ ] `src/refactor_agent/orchestrator/state.py`：定义图状态（pydantic model）
+- [ ] `src/upgrade_dependencies_agent/orchestrator/state.py`：定义图状态（pydantic model）
   - `project_profile: str` — analyze 节点的产出
   - `upgrade_plan: UpgradePlan` — plan 节点的结构化输出
   - `changes_made: list[str]` — execute 节点的变更记录
   - `test_result: TestResult` — verify 节点的结果
   - `iterations: int` — 自愈循环计数
-- [ ] `src/refactor_agent/orchestrator/graph.py`：StateGraph 定义
+- [ ] `src/upgrade_dependencies_agent/orchestrator/graph.py`：StateGraph 定义
   ```
   analyze → research → plan → execute → verify
                                         ↓ (pass) → report (END)
@@ -59,7 +59,7 @@
 
 ### M3.3 Structured Output（计划节点需要）
 
-- [ ] `src/refactor_agent/core/structured.py`：封装 Claude/OpenAI 的 structured
+- [ ] `src/upgrade_dependencies_agent/core/structured.py`：封装 Claude/OpenAI 的 structured
   output / JSON mode，输入 pydantic BaseModel，返回验证过的实例
 - [ ] `UpgradePlan` schema：steps 数组，每步有 file / change_type / description / risk
 - [ ] `TestResult` schema：exit_code / passing / failing / output_excerpt

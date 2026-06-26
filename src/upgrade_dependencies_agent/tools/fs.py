@@ -1,7 +1,7 @@
 """Filesystem tools: read, write, edit, glob, grep.
 
 These give the agent the same primitives a human refactorer uses. All paths are
-confined to ``workdir`` via :func:`refactor_agent.tools._common.safe_resolve`.
+confined to ``workdir`` via :func:`upgrade_dependencies_agent.tools._common.safe_resolve`.
 
 Design notes:
 - ``read_file`` truncates very large files so a single read can't blow the

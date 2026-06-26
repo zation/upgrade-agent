@@ -1,6 +1,6 @@
 """LangGraph workflow for upgrade → verify → self-heal.
 
-The graph intentionally treats :class:`refactor_agent.core.react_loop.ReActLoop`
+The graph intentionally treats :class:`upgrade_dependencies_agent.core.react_loop.ReActLoop`
 as a black-box executor. This keeps ``core/`` model-agnostic and framework-free
 while still demonstrating state-graph orchestration at the workflow layer.
 """
