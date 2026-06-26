@@ -277,7 +277,8 @@
   - [x] baseline 阶段优先解析 JSON `BaselineState`，保留 legacy verdict fallback。
   - [x] research 阶段优先解析 JSON `ResearchBrief`，保留 legacy text fallback。
   - [x] plan 阶段稳定产出 `UpgradePlan`，并优先使用 structured research 的目标版本。
-  - [ ] report 阶段继续完善 structured artifact 的风险、失败原因和 package summary。
+  - [x] report 阶段写入批量 package summary，并把 failed package 写入 `remaining_risks`。
+  - [ ] report 阶段继续完善失败原因分类和可恢复建议。
   - [x] P1：将真实 changed files 采集前移到 workflow/report node，并写入 graph state。
   - [x] P2a：为 `upgrade-all` 增加 package-level result state。
   - [x] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。

@@ -363,6 +363,43 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     assert "batch upgrade" in requests[5].task
 
 
+def test_upgrade_all_workflow_report_summarizes_package_results_and_failures() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "queue":
+            return _result(
+                """
+                {
+                  "packages": [
+                    {"name": "mocha", "current_version": "4.0.0", "target_version": "11.0.0",
+                     "dependency_type": "devDependency"},
+                    {"name": "chai", "current_version": "4.3.0", "target_version": "5.1.0",
+                     "dependency_type": "dependency"}
+                  ]
+                }
+                """
+            )
+        if request.stage == "verify_package" and "chai" in request.task:
+            return _result(
+                '{"ok": false, "command": "npm test", "summary": "chai ESM import failed"}'
+            )
+        if request.stage == "verify_package":
+            return _result('{"ok": true, "command": "npm test", "summary": "mocha passed"}')
+        if request.stage == "verify":
+            return _result('{"ok": false, "command": "npm test", "summary": "batch failed"}')
+        return _result("stage complete")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=0,
+        run_loop=run_loop,
+    )
+
+    assert result.report is not None
+    assert result.report.ok is False
+    assert "mocha: done" in result.report.summary
+    assert "chai: failed" in result.report.summary
+    assert "chai: chai ESM import failed" in result.report.remaining_risks
+
+
 def test_upgrade_all_workflow_report_collects_changed_files() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         if request.stage == "queue":

@@ -344,18 +344,12 @@ def run_upgrade_all_backbone_workflow(
 
     def report(state: UpgradeGraphState) -> UpgradeGraphState:
         verification = state.get("verification")
-        ok = bool(verification and verification.ok)
-        summary = verification.summary if verification else "verification did not run"
         changed_files = _collect_changed_files(state, collect_changed_files)
+        report_artifact = _batch_agent_report(state, changed_files, verification)
         return {
             **state,
             "changed_files": changed_files,
-            "report": AgentReport(
-                ok=ok,
-                summary=summary,
-                changed_files=changed_files,
-                remaining_risks=[] if ok else ["batch upgrade verification failed"],
-            ),
+            "report": report_artifact,
             "history": [*state.get("history", []), "report"],
         }
 
@@ -654,6 +648,34 @@ def _single_upgrade_plan(target: str, state: UpgradeGraphState) -> UpgradePlan:
             "run verification tests",
         ],
         allowed_files=["package.json", "package-lock.json"],
+    )
+
+
+def _batch_agent_report(
+    state: UpgradeGraphState,
+    changed_files: list[str],
+    verification: VerificationResult | None,
+) -> AgentReport:
+    ok = bool(verification and verification.ok)
+    verification_summary = verification.summary if verification else "verification did not run"
+    package_results = state.get("package_results", [])
+    package_summary = ", ".join(f"{record.name}: {record.status}" for record in package_results)
+    summary = (
+        verification_summary
+        if not package_summary
+        else f"{verification_summary}; {package_summary}"
+    )
+    failed_packages = [
+        f"{record.name}: {record.summary}"
+        for record in package_results
+        if record.status == "failed"
+    ]
+    remaining_risks = [] if ok else ["batch upgrade verification failed", *failed_packages]
+    return AgentReport(
+        ok=ok,
+        summary=summary,
+        changed_files=changed_files,
+        remaining_risks=remaining_risks,
     )
 
 
