@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from upgrade_dependencies_agent.skills import (
+    ADD_TESTS_ANALYZE,
     ADD_TESTS_GENERATE,
+    ANALYZE,
     BASE_AGENT,
     BREAKING_CHANGE_RESEARCHER,
     UPGRADE,
@@ -82,3 +84,8 @@ def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:
 
 def test_generate_tests_uses_shared_test_generation_workflow() -> None:
     assert TEST_GENERATION_WORKFLOW in ADD_TESTS_GENERATE
+
+
+def test_read_only_analysis_prompts_keep_read_only_contract() -> None:
+    assert READ_ONLY_RULE in ANALYZE
+    assert READ_ONLY_RULE in ADD_TESTS_ANALYZE

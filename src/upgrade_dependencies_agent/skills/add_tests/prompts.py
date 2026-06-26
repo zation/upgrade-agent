@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
-from ..fragments import BASELINE_RULE, TEST_GENERATION_WORKFLOW, TEST_STYLE_RULE, VERIFY_RULE
+from ..fragments import (
+    BASELINE_RULE,
+    READ_ONLY_RULE,
+    TEST_GENERATION_WORKFLOW,
+    TEST_STYLE_RULE,
+    VERIFY_RULE,
+)
 from ..prompts import BASE_AGENT
 from ..rendering import PromptSection, SkillPrompt
 
-ADD_TESTS_ANALYZE = (
-    BASE_AGENT
-    + "\n\n"
-    + """\
-## Current task: analyze coverage gaps
-
+ADD_TESTS_ANALYZE = SkillPrompt(
+    base=BASE_AGENT,
+    contracts=(READ_ONLY_RULE,),
+    sections=(
+        PromptSection(
+            "Current task: analyze coverage gaps",
+            """\
 You are a read-only test-gap analyst. Your job is to identify the safest, most
-valuable tests to add before any files are edited.
-
-Workflow:
+valuable tests to add before any files are edited.""",
+        ),
+        PromptSection(
+            "Workflow",
+            """\
 1. Read package.json to identify the test and coverage commands.
 2. Read the existing test files to learn naming conventions, assertion style,
    fixtures, setup helpers, and where new tests should live.
@@ -25,21 +34,28 @@ Workflow:
    coverage/coverage-summary.json, coverage/lcov.info, or text output from the
    configured coverage script.
 5. If no coverage report exists, say so and infer likely gaps from source/test
-   comparison instead of pretending coverage data was available.
-
+   comparison instead of pretending coverage data was available.""",
+        ),
+        PromptSection(
+            "Report",
+            """\
 Report a test gap list in this exact shape:
 - file / function / suggested test scenarios
 - existing coverage signal or reason the gap is suspected
 - recommended test file location
-- risk and priority
-
-Rules:
+- risk and priority""",
+        ),
+        PromptSection(
+            "Rules",
+            """\
 - Do not edit files.
 - Do not run mutating commands.
 - Prefer gaps around public behavior, edge cases, and regressions over trivial
   line coverage.
-- Keep recommendations compatible with the project's existing test style."""
-)
+- Keep recommendations compatible with the project's existing test style.""",
+        ),
+    ),
+).render()
 
 
 ADD_TESTS_GENERATE = SkillPrompt(

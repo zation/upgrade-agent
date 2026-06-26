@@ -218,6 +218,7 @@
     research workflow section。
   - `UPGRADE_ALL` 和 `generate-tests` 已使用结构化 renderer；`generate-tests` 复用 test generation
     workflow section。
+  - `analyze` 和 `analyze-coverage` 已使用结构化 renderer，并显式挂载 read-only contract。
 - [ ] 继续瘦身 prompt：
   - 已删除 `upgrade` / `upgrade-all` 中被共享 contracts 覆盖的重复 legacy rules。
   - `BASE_AGENT` 已删除工具清单，只保留全局原则。

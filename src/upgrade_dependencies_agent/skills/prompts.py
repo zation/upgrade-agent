@@ -39,12 +39,13 @@ step before starting the next.
 and anything that still needs human attention."""
 
 
-ANALYZE = (
-    BASE_AGENT
-    + "\n\n"
-    + """\
-## Current task: analyze a project
-
+ANALYZE = SkillPrompt(
+    base=BASE_AGENT,
+    contracts=(READ_ONLY_RULE,),
+    sections=(
+        PromptSection(
+            "Current task: analyze a project",
+            """\
 Produce a clear profile of the project so the next phase can plan upgrades. \
 Investigate, then report:
 1. **Overview** — what the project is, its entry points, its role.
@@ -52,12 +53,17 @@ Investigate, then report:
 3. **Tech & style signals** — module system (CommonJS/ESM), language version \
 (e.g. ES5 `var`, modern `const`), test runner, CI, build tooling.
 4. **Upgrade risks** — which dependencies are likely to have breaking changes, \
-and why (major version jumps, ESM-only releases, etc.).
-
-Use the tools to actually look (read package.json, source files, CI config). \
-Do not speculate about contents you haven't read. End with a concise findings \
-summary; do not edit anything in this phase."""
-)
+and why (major version jumps, ESM-only releases, etc.).""",
+        ),
+        PromptSection(
+            "Rules",
+            """\
+- Use the tools to actually look: read package.json, source files, and CI config.
+- Do not speculate about contents you have not read.
+- End with a concise findings summary; do not edit anything in this phase.""",
+        ),
+    ),
+).render()
 
 
 BREAKING_CHANGE_RESEARCHER = SkillPrompt(

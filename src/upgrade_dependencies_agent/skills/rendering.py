@@ -1,4 +1,9 @@
-"""Structured prompt rendering primitives."""
+"""Structured prompt rendering primitives.
+
+These helpers keep prompts maintainable before runtime guardrails exist. They
+render prompt contracts into text for the LLM; they do not enforce behavior at
+runtime. Programmatic enforcement belongs in the graph/state/tool layer.
+"""
 
 from __future__ import annotations
 
