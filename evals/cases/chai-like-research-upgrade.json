@@ -1,0 +1,26 @@
+{
+  "name": "chai-like mocha research upgrade",
+  "target": "../chai-like",
+  "timeout": 1800,
+  "env": {},
+  "setup": [],
+  "command": [
+    "uv",
+    "run",
+    "upgrade-dependencies-agent",
+    "research-upgrade",
+    "{workdir}",
+    "mocha 4 -> 11"
+  ],
+  "teardown": [],
+  "budgets": {
+    "max_iterations": 20,
+    "max_input_tokens": 500000
+  },
+  "checks": [
+    {
+      "type": "git_diff",
+      "allowed_paths": []
+    }
+  ]
+}

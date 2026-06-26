@@ -226,7 +226,7 @@
   - `upgrade-all` prompt 必须包含 one dependency at a time。
   - `research-upgrade` prompt 必须包含 read-only / sources / verdict。
   - `generate-tests` prompt 必须包含 existing style / baseline / verify。
-- [ ] 为 `upgrade`、`upgrade-all`、`research-upgrade`、`generate-tests` 维护最小 eval fixtures。
+- [x] 为 `upgrade`、`upgrade-all`、`research-upgrade`、`generate-tests` 维护最小 eval fixtures。
 - [ ] 根据 eval 结果删减 prompt 中过度重复或成本高的段落。
   - 已增加 prompt 字符数统计 helper，后续可用来比较瘦身前后变化。
 

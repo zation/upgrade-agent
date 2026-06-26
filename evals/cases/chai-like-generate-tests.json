@@ -1,0 +1,27 @@
+{
+  "name": "chai-like generate focused tests",
+  "target": "../chai-like",
+  "timeout": 1800,
+  "env": {},
+  "setup": [],
+  "command": [
+    "uv",
+    "run",
+    "upgrade-dependencies-agent",
+    "generate-tests",
+    "{workdir}",
+    "cover uncovered public APIs"
+  ],
+  "teardown": [],
+  "budgets": {
+    "max_iterations": 45,
+    "max_input_tokens": 1000000
+  },
+  "checks": [
+    {
+      "type": "command",
+      "command": "npm test",
+      "timeout": 300
+    }
+  ]
+}
