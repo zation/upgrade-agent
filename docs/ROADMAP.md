@@ -137,8 +137,9 @@ release-note sources；`research-upgrade` 已作为只读 breaking-change resear
 - [x] 加通用 `trace_sequence` check：从 JSONL trace 判断关键 tool/command 是否按顺序出现。
 - [x] 增加 `baseline_before_mutation` trajectory policy：判断是否先 baseline，再进行
   install/edit 等 mutating action；失败分类为 `baseline_missing`。
-- [ ] 增加更多专用 trajectory policies：判断是否一包一包升级、是否读取真实失败输出、
-  是否产生越权/无关修改。
+- [x] 增加 `single_dependency_at_a_time` trajectory policy：检测一次 `npm install`
+  是否包含多个 package target；失败分类为 `multi_dependency_upgrade`。
+- [ ] 增加更多专用 trajectory policies：判断是否读取真实失败输出、是否产生越权/无关修改。
 - [x] 基础失败分类：`test_failed`、`wrong_diff`、`timeout`、`llm_error`、
   `trajectory_violation`、`postcondition_failed` 等，方便比较优化前后。
 - [x] 在专用 trajectory policies 中补充 `baseline_missing` 流程违规分类。

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -371,6 +372,8 @@ def _check_trajectory_policy(check: dict[str, Any], workdir: Path) -> CheckResul
     events = _read_trace_events(full)
     if policy == "baseline_before_mutation":
         return _check_baseline_before_mutation(name, events)
+    if policy == "single_dependency_at_a_time":
+        return _check_single_dependency_at_a_time(name, events)
     return CheckResult(name=name, ok=False, message=f"unknown trajectory policy: {policy}")
 
 
@@ -438,6 +441,47 @@ def _event_description(event: dict[str, Any]) -> str:
     tool = data.get("name", "?")
     command = data.get("input", {}).get("command")
     return f"{tool} {command}" if command else tool
+
+
+def _check_single_dependency_at_a_time(name: str, events: list[dict[str, Any]]) -> CheckResult:
+    for event in events:
+        if not _is_tool_call(event):
+            continue
+        command = event.get("data", {}).get("input", {}).get("command", "")
+        targets = _npm_install_targets(command)
+        if len(targets) > 1:
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"multiple install targets in one command: {targets}",
+            )
+    return CheckResult(name=name, ok=True, message="no multi-dependency install command found")
+
+
+def _npm_install_targets(command: str) -> list[str]:
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        parts = command.split()
+    if len(parts) < 3:
+        return []
+    if parts[0] != "npm" or parts[1] not in {"install", "i"}:
+        return []
+    targets: list[str] = []
+    skip_next = False
+    for part in parts[2:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if part in {"--save-dev", "-D", "--save", "-S", "--global", "-g"}:
+            continue
+        if part in {"--workspace", "-w"}:
+            skip_next = True
+            continue
+        if part.startswith("-"):
+            continue
+        targets.append(part)
+    return targets
 
 
 def _read_trace_events(path: Path) -> list[dict[str, Any]]:
@@ -534,6 +578,8 @@ def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
         message = (failing.message if failing else "").lower()
         if "baseline" in message:
             return "baseline_missing"
+        if "multiple install targets" in message:
+            return "multi_dependency_upgrade"
         return "trajectory_violation"
     if name == "git_diff":
         return "wrong_diff"

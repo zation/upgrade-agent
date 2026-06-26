@@ -501,3 +501,85 @@ def test_baseline_before_mutation_policy_reports_baseline_missing(tmp_path: Path
     assert result.failure_reason == "baseline_missing"
     assert result.checks[0].name == "trajectory_policy:baseline_before_mutation"
     assert "mutation before baseline" in result.checks[0].message
+
+
+def test_single_dependency_policy_passes_for_one_install_target(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "single dependency",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trajectory_policy",
+                        "policy": "single_dependency_at_a_time",
+                        "path": "trace.jsonl",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.checks[0].name == "trajectory_policy:single_dependency_at_a_time"
+
+
+def test_single_dependency_policy_fails_for_multiple_install_targets(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "multiple dependencies",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11 nyc@15"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trajectory_policy",
+                        "policy": "single_dependency_at_a_time",
+                        "path": "trace.jsonl",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "multi_dependency_upgrade"
+    assert result.checks[0].name == "trajectory_policy:single_dependency_at_a_time"
+    assert "multiple install targets" in result.checks[0].message
