@@ -96,18 +96,17 @@
 
 ### M5.1 评估框架
 
-- [ ] `evals/cases/chai-like-mocha-upgrade.yaml`：固定的评估任务定义
-  ```yaml
-  name: "mocha 4→11 upgrade"
-  target: "../chai-like"
-  task: "Upgrade mocha from 4.x to latest stable"
-  success_criteria:
-    - mocha_version: ">=11.0.0"
-    - tests_passing: 28
-    - tests_failing: 0
-  ```
-- [ ] `evals/runner.py`：跑评估 case → 对比结果 vs golden → 输出 pass/fail
-- [ ] `evals/golden/chai-like-mocha-upgrade.json`：期望结果
+- [x] `evals/runner.py`：deterministic eval v1。复制 target 到隔离目录，运行 case command，
+  再检查客观后置条件（package version、test command、git diff allowed paths）。
+- [x] `evals/cases/chai-like-mocha-upgrade.json`：第一个真实 case 模板，覆盖 mocha 4→11。
+- [x] `tests/test_evals_runner.py`：覆盖成功/失败 check，并确认不会修改原 target。
+- [ ] 扩展 case schema：加入 `timeout`、环境变量、setup/teardown、expected token/iteration budget。
+- [ ] 支持多 case 批量运行：输出 JSON summary，适合 CI 或本地回归。
+- [ ] 加 trace-based trajectory eval：从 JSONL trace 判断是否先 baseline、是否一包一包升级、
+  是否读取真实失败输出、是否产生越权/无关修改。
+- [ ] 失败分类：`baseline_missing`、`test_failed`、`wrong_diff`、`timeout`、`llm_error`、
+  `trajectory_violation`，方便比较优化前后。
+- [ ] 可选 LLM-as-judge：只评价报告质量、风险解释、source coverage；核心 pass/fail 仍靠脚本。
 
 ### M5.2 CLI 打磨
 
@@ -136,15 +135,128 @@
 
 ---
 
+## M7：可靠性 guardrails + 结构化状态
+
+**目标**：把"靠 prompt 约束"升级为"程序化约束 + 可验证状态"，降低 agent 忘步骤或误报成功的概率。
+
+### M7.1 结构化结果与状态
+
+- [ ] `core/structured.py`：封装 Claude/OpenAI-compatible 的 JSON/structured output，
+  输入 pydantic schema，返回验证过的对象。
+- [ ] 定义 `UpgradePlan`、`VerificationResult`、`AgentReport`：
+  - `UpgradePlan`: dependency / from_version / to_version / steps / risk / expected files
+  - `VerificationResult`: command / exit_code / passing / failing / output_excerpt / verdict
+  - `AgentReport`: changes / tests / warnings / blocked_reason
+- [ ] `upgrade-graph` 的 verify 节点优先消费 `VerificationResult`，减少关键词启发式。
+- [ ] eval runner 增加 structured report check：如果 CLI 输出 JSON，直接检查字段，而不是读自然语言。
+
+### M7.2 执行 guardrails
+
+- [ ] 在 tool/runtime 层记录 run state：baseline 是否已跑、baseline 是否 green、当前正在升级哪个包。
+- [ ] 没有 green baseline 前，禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
+- [ ] `upgrade-all` 中检测一次只升级一个 direct dependency；发现 package.json 同时改多个 direct dep 时标记失败。
+- [ ] 禁止危险 revert：把 prompt 中的 `git reset --hard` 改成"只 revert 本次修改过的文件"，并用工具层保护。
+- [ ] 运行前检测 dirty target：如果 target 已有未提交改动，要求 agent 报告并避免覆盖用户改动。
+
+### M7.3 Workflow 收敛
+
+- [ ] 将 `upgrade`、`upgrade-all`、`generate-tests` 的关键阶段映射成状态机：
+  baseline → plan/research → execute → verify → report。
+- [ ] 每个阶段输出结构化 artifact，后续阶段只消费 artifact + 必要上下文，减少全历史依赖。
+- [ ] self-heal 限定为"基于 verify failure 的最小修复"，每次 heal 后必须重新 verify。
+
+---
+
+## M8：成本与上下文优化
+
+**目标**：以 eval 数据为准，把真实 upgrade run 的 token、tool call、iteration 降下来，同时保持成功率。
+
+### M8.1 文件读取与命令输出优化
+
+- [ ] `read_file` 加 per-run cache：同一文件同一 offset+limit 不重复返回全文。
+- [ ] 大文件默认摘要：`package-lock.json`、coverage report、长 changelog 首次只返回结构摘要和可分页提示。
+- [ ] `run_command` 对常见命令做智能摘要：
+  - `npm test`: 保留命令、exit code、passing/failing summary、失败堆栈尾部
+  - `npm install`: 保留 ERESOLVE、peer warnings、deprecations、package changed summary
+  - `npm outdated`: 尽量返回 parsed JSON 而非原始噪声
+- [ ] grep/glob 支持 ignore 配置和更强 caps，避免 node_modules、coverage、lockfile 噪声进入上下文。
+
+### M8.2 Memory / compaction
+
+- [ ] 降低 `DEFAULT_INPUT_BUDGET` 到 80k-100k，让 compaction 更早触发。
+- [ ] compaction 时生成任务摘要：保留 baseline、已改文件、失败原因、验证结论、剩余 TODO。
+- [ ] trace 中记录 compaction 前后 token 估算，eval summary 统计 compaction 次数和节省量。
+
+### M8.3 成本回归指标
+
+- [ ] eval summary 输出 `iterations`、`tool_calls`、`input_tokens`、`output_tokens`、`wall_time`。
+- [ ] 为核心 case 设置预算阈值，例如 mocha upgrade 不超过 N iterations / N tokens。
+- [ ] 建一个小的历史结果文件或 CI artifact，用于比较优化前后成功率和成本。
+
+---
+
+## M9：RAG / dependency research 质量提升
+
+**目标**：让研究阶段既少读无关 changelog，又能给升级阶段稳定提供"和本项目有关"的 breaking-change 证据。
+
+### M9.1 Source discovery 与缓存
+
+- [ ] `dependency_research` 输出更可靠的 source candidates：GitHub releases、CHANGELOG、migration guide、
+  docs site、npm README。
+- [ ] `data/changelogs/` 或 per-run cache：同一 package/version/source 不重复请求。
+- [ ] 处理 GitHub rate limit、404、重定向、非 Markdown/HTML 页面，并在报告里说明 source gap。
+
+### M9.2 Retrieval 与 relevance
+
+- [ ] release notes / changelog 按版本和 heading chunk。
+- [ ] 先用 keyword retrieval：breaking、removed、deprecated、require、ESM、Node、peer、CLI/config。
+- [ ] 结合 project usage search：只有找到项目使用模式时，才把 generic breaking change 标成"相关风险"。
+- [ ] research 输出结构化 `ResearchBrief`：version span、relevant breaking changes、project usages、
+  source URLs、confidence。
+
+### M9.3 Research eval
+
+- [ ] 增加 read-only eval case：`research-upgrade` 不允许产生 git diff。
+- [ ] 对 known package upgrades 建 source coverage check：报告必须包含实际读过的 changelog/release source。
+- [ ] 对"没有找到可靠 changelog"的情况，要求明确降级为测试驱动验证，不允许伪造 breaking change。
+
+---
+
+## M10：Skill / prompt 体系瘦身
+
+**目标**：减少长 prompt 带来的成本和遗忘风险，把稳定规则下沉到代码和 schema，把 prompt 留给任务策略。
+
+### M10.1 Prompt 分层
+
+- [ ] `BASE_AGENT` 只保留全局原则：调查、最小修改、验证、清晰报告。
+- [ ] 各 task prompt 只描述本任务阶段、输出 schema、特殊规则。
+- [ ] 把重复规则提取成共享片段，例如 baseline rule、verify rule、report rule。
+
+### M10.2 Prompt 与 guardrail 分工
+
+- [ ] 删除或弱化可以由工具层强制的规则，避免 prompt 又长又重复。
+- [ ] 把"必须先 baseline"、"只能改 allowed paths"、"不能危险 revert"迁移到 runtime/eval。
+- [ ] prompt 中保留"为什么要这么做"和异常时如何报告。
+
+### M10.3 Skill regression tests
+
+- [ ] 增加 prompt snapshot/contract tests：确保关键规则和输出字段仍存在。
+- [ ] 用 eval cases 对比 prompt 改短前后的成功率、成本、违规率。
+- [ ] 对 `upgrade`、`upgrade-all`、`generate-tests` 分别维护一组最小 fixture。
+
+---
+
 ## 建议的执行顺序
 
 ```
-M3.1 (token优化) → M3.3 (structured output) → M3.2 (LangGraph编排)
-  → M4.1 (changelog工具) → M4.2 (RAG) → M4.3 (子agent)
-    → M5.1 (评估) → M5.2 (CLI)
-      → M6.1 → M6.2
+M5.1 v1 已完成 → M5.1 扩展批量/trajectory eval
+  → M7.1 structured output/state → M7.2 guardrails
+    → M8 成本与上下文优化
+      → M9 RAG/research 质量提升
+        → M10 prompt/skill 瘦身
+          → M5.2 CLI 打磨
 ```
 
-理由：token 优化是全局受益的，先做；structured output 是 LangGraph plan 节点
-的前置；LangGraph 是后续所有编排的基础；RAG/子agent 依赖编排框架；评估依赖
-前面的稳定功能；补测试是最后一个独立技能。
+理由：先把 eval 扩展成能稳定衡量 outcome + trajectory + cost 的工具，再做
+structured output 和 guardrails，让后续优化有客观反馈；成本优化和 RAG 质量提升都
+应该用 eval 数据验证；最后再瘦身 skill/prompt，避免在没有回归保护时改坏 agent 行为。
