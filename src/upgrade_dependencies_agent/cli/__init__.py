@@ -16,7 +16,7 @@ Commands:
 - ``research-upgrade`` — read-only breaking-change research for one upgrade.
 - ``upgrade`` — LangGraph-backed upgrade of ONE dependency.
 - ``upgrade-graph`` — compatibility alias for the graph-backed upgrade flow.
-- ``upgrade-all`` — full-tool upgrade of all direct dependencies, one at a time.
+- ``upgrade-all`` — graph-backed batch upgrade of direct dependencies.
 - ``ask``     — give the agent any task against a project, with full tools.
 
 All wire the same primitives: create_client() → ReActLoop → tools, observed by
@@ -26,20 +26,24 @@ the RichUI. This is the user-facing surface; everything substantive is in core/.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
 from rich.console import Console
 
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
-from ..orchestrator import StageLoopRequest, run_upgrade_backbone_workflow
+from ..orchestrator import (
+    StageLoopRequest,
+    run_upgrade_all_backbone_workflow,
+    run_upgrade_backbone_workflow,
+)
 from ..skills import (
     ADD_TESTS_ANALYZE,
     ADD_TESTS_GENERATE,
     ANALYZE,
     BASE_AGENT,
     BREAKING_CHANGE_RESEARCHER,
-    UPGRADE_ALL,
 )
 from ..tools import default_tools, read_only_tools
 from .ui import RichUI
@@ -69,6 +73,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+CliStageLoopRunner = Callable[[StageLoopRequest], LoopResult]
 
 
 def _resolve_workdir(path: Path) -> str:
@@ -227,7 +232,50 @@ def _run_upgrade_backbone_cli(
     ui: RichUI,
 ) -> bool:
     client = create_client()
+    result = run_upgrade_backbone_workflow(
+        target,
+        max_heal_attempts=max_heal_attempts,
+        run_loop=_make_stage_loop_runner(
+            client=client,
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        ),
+    )
+    return result.ok
 
+
+def _run_upgrade_all_backbone_cli(
+    *,
+    model: str,
+    max_iterations: int,
+    max_heal_attempts: int,
+    workdir: str,
+    ui: RichUI,
+) -> bool:
+    client = create_client()
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=max_heal_attempts,
+        run_loop=_make_stage_loop_runner(
+            client=client,
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        ),
+    )
+    return result.ok
+
+
+def _make_stage_loop_runner(
+    *,
+    client: object,
+    model: str,
+    max_iterations: int,
+    workdir: str,
+    ui: RichUI,
+) -> CliStageLoopRunner:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         loop = ReActLoop(
             client=client,
@@ -243,12 +291,7 @@ def _run_upgrade_backbone_cli(
         )
         return loop.run(request.task)
 
-    result = run_upgrade_backbone_workflow(
-        target,
-        max_heal_attempts=max_heal_attempts,
-        run_loop=run_loop,
-    )
-    return result.ok
+    return run_loop
 
 
 @app.command()
@@ -309,31 +352,14 @@ def upgrade_all(
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
 
-    client = create_client()
-    loop = ReActLoop(
-        client=client,
-        config=AgentConfig(
-            model=model,
-            system_prompt=UPGRADE_ALL,
-            max_iterations=max_iterations,
-            enforce_baseline_guardrail=True,
-        ),
-        tools=default_tools(),
+    ok = _run_upgrade_all_backbone_cli(
+        model=model,
+        max_iterations=max_iterations,
+        max_heal_attempts=1,
         workdir=workdir,
-        callbacks=RichUI(verbose=verbose),
+        ui=RichUI(verbose=verbose),
     )
-    task = (
-        "Upgrade all direct npm dependencies and devDependencies in this project "
-        "to their latest stable versions.\n\n"
-        "Follow the all-dependencies upgrade workflow strictly: first establish "
-        "a green test baseline and record the passing count, then use npm_outdated "
-        "to build the package queue, upgrade exactly one direct package at a time, "
-        "verify tests after each package, fix only breakages caused by that package, "
-        "and finish with a final test run plus git diff review. If one package "
-        "cannot be fixed safely, revert that package and continue with the rest."
-    )
-    result = loop.run(task)
-    raise typer.Exit(code=0 if result.ok else 1)
+    raise typer.Exit(code=0 if ok else 1)
 
 
 @app.command()

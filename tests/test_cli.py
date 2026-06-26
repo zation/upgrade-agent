@@ -106,3 +106,22 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
     assert calls["target"] == "mocha 4 -> 11"
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
+
+
+def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    def fake_workflow(*, max_heal_attempts: int, run_loop):
+        calls["max_heal_attempts"] = max_heal_attempts
+        calls["run_loop"] = run_loop
+        return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade-all", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert calls["max_heal_attempts"] == 1
+    assert callable(calls["run_loop"])

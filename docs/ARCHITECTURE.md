@@ -110,20 +110,21 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 | `generate-tests` | 添加聚焦测试并验证。 |
 | `research-upgrade` | 只读研究一个依赖升级。 |
 | `upgrade` | 标准单依赖升级入口，使用 LangGraph backbone。 |
-| `upgrade-all` | 所有直接依赖逐个升级。 |
+| `upgrade-all` | 批量升级入口，使用 batch backbone。 |
 | `upgrade-graph` | 兼容 alias，行为与 `upgrade` 同源，后续可能移除。 |
 | `ask` | 任意任务，可用 `--read-only` 限制权限。 |
 
 ## LangGraph 编排
 
 `orchestrator/upgrade_backbone.py` 和 `orchestrator/upgrade_workflow.py`
-当前承载单依赖升级的 LangGraph backbone；`orchestrator/upgrade_graph.py`
+当前承载单依赖与批量升级的 LangGraph backbone；`orchestrator/upgrade_graph.py`
 保留旧 thin graph 实现，主要用于兼容和对照测试。
 
 已实现：
 
 - baseline 节点建立升级前测试基线。
-- research 节点只读研究 breaking changes。
+- 单依赖 research 节点只读研究 breaking changes。
+- 批量 queue 节点只读生成 direct dependency 升级队列摘要。
 - plan 节点生成最小升级计划。
 - execute 节点执行升级。
 - verify 节点独立验证结果。

@@ -21,7 +21,7 @@
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
-| M8 | 🚧 | LangGraph Backbone、结构化状态与运行时 Guardrails | `upgrade` 已迁移到 full backbone，baseline guardrail v1 已落地 |
+| M8 | 🚧 | LangGraph Backbone、结构化状态与运行时 Guardrails | `upgrade` / `upgrade-all` 已迁移到 backbone，baseline guardrail v1 已落地 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -263,10 +263,12 @@
   - verify fail → self-heal → verify，限制次数。
 - [x] LangGraph backbone 真实节点接入 v1：
   - `upgrade` CLI 已迁移到 full backbone，成为标准单依赖升级入口。
+  - `upgrade-all` CLI 已迁移到 batch backbone v1。
   - `upgrade-graph` 保留为兼容 alias，行为与 `upgrade` 同源。
   - baseline / research / plan / execute / verify / heal / report 已作为 graph stage 串联。
 - [ ] LangGraph structured artifacts 后续：
   - 每个阶段通过 structured output 稳定产出 artifact。
+  - `upgrade-all` 的 queue 从自然语言摘要升级为结构化 package 队列，并支持更精确的逐包 state。
   - 用 `VerificationResult` 替代自然语言 verdict / keyword 判断。
 - [ ] `core/structured.py`：封装 Claude / OpenAI-compatible 的 JSON / structured output，
   让 graph node 能稳定产出上述 artifact schema。

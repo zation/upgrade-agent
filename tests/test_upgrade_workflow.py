@@ -7,6 +7,7 @@ from pathlib import Path
 from upgrade_dependencies_agent.core import LoopResult
 from upgrade_dependencies_agent.orchestrator.upgrade_workflow import (
     StageLoopRequest,
+    run_upgrade_all_backbone_workflow,
     run_upgrade_backbone_workflow,
 )
 
@@ -91,3 +92,73 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
     heal_request = requests[4]
     assert heal_request.enforce_baseline_guardrail is True
     assert "Self-heal" in heal_request.task
+
+
+def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        requests.append(request)
+        if request.stage == "verify":
+            return _result("tests passed\nVERDICT: PASS")
+        return _result("stage complete")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert result.ok
+    assert result.history == (
+        "baseline",
+        "research",
+        "plan",
+        "execute",
+        "verify:ok",
+        "report",
+    )
+    assert [request.stage for request in requests] == [
+        "baseline",
+        "queue",
+        "execute_all",
+        "verify",
+    ]
+    assert requests[0].read_only is False
+    assert requests[1].read_only is True
+    assert "npm_outdated" in requests[1].task
+    assert requests[2].enforce_baseline_guardrail is True
+    assert "exactly one direct package at a time" in requests[2].task
+    assert "VERDICT: PASS" in requests[3].task
+
+
+def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
+    verify_calls = 0
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        nonlocal verify_calls
+        requests.append(request)
+        if request.stage == "verify":
+            verify_calls += 1
+            if verify_calls == 1:
+                return _result("batch failed\nVERDICT: FAIL")
+            return _result("batch passed\nVERDICT: PASS")
+        return _result("stage complete")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert result.ok
+    assert result.heal_attempts == 1
+    assert [request.stage for request in requests] == [
+        "baseline",
+        "queue",
+        "execute_all",
+        "verify",
+        "heal",
+        "verify",
+    ]
+    assert requests[4].enforce_baseline_guardrail is True
+    assert "batch upgrade" in requests[4].task
