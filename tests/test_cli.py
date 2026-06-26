@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from typer.testing import CliRunner
 
+import upgrade_dependencies_agent.cli as cli
 import upgrade_dependencies_agent.skills as skills
 from upgrade_dependencies_agent.cli import app
 from upgrade_dependencies_agent.skills import BREAKING_CHANGE_RESEARCHER, UPGRADE_ALL
@@ -52,3 +55,33 @@ def test_add_tests_generate_prompt_requires_existing_style_and_verification():
     assert "If no npm test script exists" in skills.ADD_TESTS_GENERATE
     assert "Run npm test" in skills.ADD_TESTS_GENERATE
     assert "coverage improves" in skills.ADD_TESTS_GENERATE
+
+
+def test_upgrade_graph_cli_uses_backbone_workflow(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop):
+        calls["target"] = target
+        calls["max_heal_attempts"] = max_heal_attempts
+        calls["run_loop"] = run_loop
+        return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "upgrade-graph",
+            str(tmp_path),
+            "mocha 4 -> 11",
+            "--max-heal-attempts",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls["target"] == "mocha 4 -> 11"
+    assert calls["max_heal_attempts"] == 2
+    assert callable(calls["run_loop"])

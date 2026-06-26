@@ -32,7 +32,7 @@ import typer
 from rich.console import Console
 
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
-from ..orchestrator import UpgradeGraphRunner
+from ..orchestrator import StageLoopRequest, run_upgrade_backbone_workflow
 from ..skills import (
     ADD_TESTS_ANALYZE,
     ADD_TESTS_GENERATE,
@@ -264,38 +264,33 @@ def upgrade_graph(
     max_heal_attempts: int = typer.Option(1, "--max-heal-attempts"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Upgrade one dependency through a LangGraph execute → verify → heal flow."""
+    """Upgrade one dependency through the full LangGraph backbone."""
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]graph upgrade[/bold] {target} in {workdir}")
 
     client = create_client()
     ui = RichUI(verbose=verbose)
 
-    def run_loop(system_prompt: str, task: str) -> LoopResult:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
         loop = ReActLoop(
             client=client,
             config=AgentConfig(
-                model=model, system_prompt=system_prompt, max_iterations=max_iterations
+                model=model,
+                system_prompt=request.system_prompt,
+                max_iterations=max_iterations,
+                enforce_baseline_guardrail=request.enforce_baseline_guardrail,
             ),
-            tools=default_tools(),
+            tools=read_only_tools() if request.read_only else default_tools(),
             workdir=workdir,
             callbacks=ui,
         )
-        return loop.run(task)
+        return loop.run(request.task)
 
-    execute_task = (
-        f"Upgrade the dependency: {target}.\n\n"
-        "Establish a green baseline, make the minimal version/code change, and "
-        "run the tests once after the change. A separate graph node will perform "
-        "final verification, so finish with a concise summary of what changed."
-    )
-    runner = UpgradeGraphRunner(
-        execute=lambda _: run_loop(UPGRADE, execute_task),
-        verify=lambda task: run_loop(BASE_AGENT, task),
-        heal=lambda task: run_loop(UPGRADE, task),
+    result = run_upgrade_backbone_workflow(
+        target,
         max_heal_attempts=max_heal_attempts,
+        run_loop=run_loop,
     )
-    result = runner.run(execute_task)
     raise typer.Exit(code=0 if result.ok else 1)
 
 
