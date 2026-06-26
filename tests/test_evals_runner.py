@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evals.runner import load_case, run_case
+from evals.runner import load_case, main, run_case, run_cases
 
 
 def _write_package(path: Path, mocha: str = "^4.0.0") -> None:
@@ -192,3 +192,94 @@ def test_run_case_timeout_is_reported_as_failure(tmp_path: Path) -> None:
     assert result.command_exit_code == 124
     assert result.checks[0].name == "case_command"
     assert "timed out after 1s" in result.checks[0].message
+
+
+def test_run_cases_summarizes_multiple_results(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json", mocha="^10.0.0")
+
+    passing_case = tmp_path / "pass.json"
+    passing_case.write_text(
+        json.dumps(
+            {
+                "name": "pass",
+                "target": str(target),
+                "command": (
+                    'python -c "import json, pathlib; '
+                    "p=pathlib.Path('package.json'); "
+                    "d=json.loads(p.read_text()); "
+                    "d['devDependencies']['mocha']='^11.0.0'; "
+                    "p.write_text(json.dumps(d, indent=2)+'\\\\n')\""
+                ),
+                "checks": [
+                    {
+                        "type": "package_json_version",
+                        "dependency": "mocha",
+                        "section": "devDependencies",
+                        "specifier": ">=11.0.0",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    failing_case = tmp_path / "fail.json"
+    failing_case.write_text(
+        json.dumps(
+            {
+                "name": "fail",
+                "target": str(target),
+                "command": "python -c \"print('unchanged')\"",
+                "checks": [
+                    {
+                        "type": "package_json_version",
+                        "dependency": "mocha",
+                        "section": "devDependencies",
+                        "specifier": ">=11.0.0",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_cases(
+        [load_case(passing_case), load_case(failing_case)],
+        workspace=tmp_path / "work",
+    )
+
+    assert not result.ok
+    assert result.count == 2
+    assert result.passed == 1
+    assert result.failed == 1
+    assert [case.case_name for case in result.results] == ["pass", "fail"]
+
+
+def test_main_accepts_case_directory_and_prints_json_summary(tmp_path: Path, capsys) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_dir = tmp_path / "cases"
+    case_dir.mkdir()
+    for name in ("a", "b"):
+        (case_dir / f"{name}.json").write_text(
+            json.dumps(
+                {
+                    "name": name,
+                    "target": str(target),
+                    "command": "python -c \"print('ok')\"",
+                    "checks": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    exit_code = main([str(case_dir), "--workspace", str(tmp_path / "work")])
+
+    output = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert output["ok"] is True
+    assert output["count"] == 2
+    assert [result["case_name"] for result in output["results"]] == ["a", "b"]

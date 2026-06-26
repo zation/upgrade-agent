@@ -88,6 +88,7 @@ Run deterministic eval cases from an isolated copy of the target project:
 
 ```bash
 uv run python -m evals.runner evals/cases/chai-like-mocha-upgrade.json
+uv run python -m evals.runner evals/cases
 ```
 
 The first eval harness does not use an LLM judge. It runs the case command, then

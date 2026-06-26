@@ -49,6 +49,15 @@ class EvalResult:
     teardown_exit_codes: list[int]
 
 
+@dataclass(frozen=True)
+class BatchEvalResult:
+    ok: bool
+    count: int
+    passed: int
+    failed: int
+    results: list[EvalResult]
+
+
 def load_case(path: Path) -> EvalCase:
     """Load one JSON eval case definition."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -63,6 +72,19 @@ def load_case(path: Path) -> EvalCase:
         teardown=data.get("teardown"),
         budgets=data.get("budgets"),
     )
+
+
+def load_cases(paths: list[Path]) -> list[EvalCase]:
+    """Load JSON cases from files or directories."""
+    case_paths: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            case_paths.extend(sorted(path.glob("*.json")))
+        else:
+            case_paths.append(path)
+    if not case_paths:
+        raise ValueError("No eval cases found.")
+    return [load_case(path) for path in case_paths]
 
 
 def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
@@ -136,6 +158,20 @@ def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
     )
 
 
+def run_cases(cases: list[EvalCase], workspace: Path | None = None) -> BatchEvalResult:
+    """Run multiple eval cases and return an aggregate summary."""
+    results = [run_case(case, workspace=workspace) for case in cases]
+    passed = sum(1 for result in results if result.ok)
+    failed = len(results) - passed
+    return BatchEvalResult(
+        ok=failed == 0,
+        count=len(results),
+        passed=passed,
+        failed=failed,
+        results=results,
+    )
+
+
 def result_to_dict(result: EvalResult) -> dict[str, Any]:
     """Serialize an eval result for CLI/CI output."""
     return {
@@ -151,9 +187,25 @@ def result_to_dict(result: EvalResult) -> dict[str, Any]:
     }
 
 
+def batch_result_to_dict(result: BatchEvalResult) -> dict[str, Any]:
+    """Serialize a batch eval result for CLI/CI output."""
+    return {
+        "ok": result.ok,
+        "count": result.count,
+        "passed": result.passed,
+        "failed": result.failed,
+        "results": [result_to_dict(case_result) for case_result in result.results],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run deterministic agent eval cases.")
-    parser.add_argument("case", type=Path, help="Path to a JSON eval case.")
+    parser.add_argument(
+        "cases",
+        nargs="+",
+        type=Path,
+        help="Path(s) to JSON eval case files or directories containing *.json cases.",
+    )
     parser.add_argument(
         "--workspace",
         type=Path,
@@ -162,9 +214,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    result = run_case(load_case(args.case), workspace=args.workspace)
-    print(json.dumps(result_to_dict(result), indent=2))
-    return 0 if result.ok else 1
+    cases = load_cases(args.cases)
+    if len(cases) == 1 and not args.cases[0].is_dir():
+        result = run_case(cases[0], workspace=args.workspace)
+        print(json.dumps(result_to_dict(result), indent=2))
+        return 0 if result.ok else 1
+    batch = run_cases(cases, workspace=args.workspace)
+    print(json.dumps(batch_result_to_dict(batch), indent=2))
+    return 0 if batch.ok else 1
 
 
 def _copy_ignore(directory: str, names: list[str]) -> set[str]:
