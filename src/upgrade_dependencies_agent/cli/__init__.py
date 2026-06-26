@@ -233,7 +233,12 @@ def upgrade(
     client = create_client()
     loop = ReActLoop(
         client=client,
-        config=AgentConfig(model=model, system_prompt=UPGRADE, max_iterations=max_iterations),
+        config=AgentConfig(
+            model=model,
+            system_prompt=UPGRADE,
+            max_iterations=max_iterations,
+            enforce_baseline_guardrail=True,
+        ),
         tools=default_tools(),
         workdir=workdir,
         callbacks=RichUI(verbose=verbose),
@@ -308,7 +313,12 @@ def upgrade_all(
     client = create_client()
     loop = ReActLoop(
         client=client,
-        config=AgentConfig(model=model, system_prompt=UPGRADE_ALL, max_iterations=max_iterations),
+        config=AgentConfig(
+            model=model,
+            system_prompt=UPGRADE_ALL,
+            max_iterations=max_iterations,
+            enforce_baseline_guardrail=True,
+        ),
         tools=default_tools(),
         workdir=workdir,
         callbacks=RichUI(verbose=verbose),

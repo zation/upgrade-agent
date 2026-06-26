@@ -21,7 +21,7 @@
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
-| M8 | ⏳ | 结构化状态与运行时 Guardrails | 下一阶段优先做 |
+| M8 | 🚧 | 结构化状态与运行时 Guardrails | baseline-before-mutation guardrail v1 已开始落地 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -245,7 +245,7 @@
 
 ## M8：结构化状态与运行时 Guardrails
 
-**状态**：⏳ 未开始
+**状态**：🚧 进行中
 
 **目标**：把关键流程从“靠 prompt 遵守”升级为“程序化状态 + 可验证约束”。
 
@@ -257,13 +257,15 @@
   - `VerificationResult`
   - `AgentReport`
   - `ResearchBrief`
-- [ ] runtime state：
+- [x] runtime state v1：
   - baseline 是否已跑。
   - baseline 是否 green。
+- [ ] runtime state 后续：
   - 当前正在升级哪个 dependency。
   - 本轮允许修改的文件范围。
-- [ ] tool guardrails：
+- [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
+- [ ] tool guardrails 后续：
   - 检测 dirty target，避免覆盖用户已有改动。
   - 禁止危险 revert；只允许 revert 本次修改过的文件。
 - [ ] 完整 graph 优化：

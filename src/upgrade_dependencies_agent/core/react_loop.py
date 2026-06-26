@@ -35,6 +35,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from .context import ContextBudget, compact_history, needs_compaction
 from .llm_client import LLMClient, LLMResponse
+from .runtime_state import RuntimeState, baseline_guardrail, update_runtime_state
 from .trace import Tracer
 from .types import (
     AgentConfig,
@@ -125,6 +126,7 @@ class ReActLoop:
         from model/tool errors — they're captured into ``LoopResult.error``)."""
         tracer = self.tracer or Tracer(self.run_id, enabled=self.config.trace)
         ctx = ToolContext(workdir=self.workdir, run_id=self.run_id)
+        runtime_state = RuntimeState()
         tool_map = self._tool_map()
 
         # Seed the transcript with the task as the first user message.
@@ -201,7 +203,7 @@ class ReActLoop:
                         is_error=True,
                     )
                 else:
-                    res = self._exec_tool(tool, call, ctx, tracer)
+                    res = self._exec_tool(tool, call, ctx, tracer, runtime_state)
                 _emit(self.callbacks, "on_tool_result", call.name, res)
                 result_blocks.append(
                     ToolResultBlock(
@@ -237,15 +239,27 @@ class ReActLoop:
         call: ToolUseBlock,
         ctx: ToolContext,
         tracer: Tracer,
+        runtime_state: RuntimeState,
     ) -> ToolResult:
         """Execute one tool call with full error containment + tracing."""
         _emit(self.callbacks, "on_tool_call", call.name, call.input)
         tracer.event("tool_call", name=call.name, input=call.input)
+        if self.config.enforce_baseline_guardrail:
+            blocked = baseline_guardrail(call, runtime_state)
+            if blocked is not None:
+                tracer.event(
+                    "tool_call",
+                    name=call.name,
+                    phase="guardrail_blocked",
+                    guardrail=blocked.metadata.get("guardrail"),
+                )
+                return blocked
         try:
             res = tool.run(call.input, ctx)
         except Exception as e:
             log.exception("tool %s raised", call.name)
             res = ToolResult(output=f"Tool '{call.name}' crashed: {e}", is_error=True)
+        update_runtime_state(call, res, runtime_state)
         tracer.event(
             "tool_call", name=call.name, phase="result", is_error=res.is_error, output=res.output
         )

@@ -181,6 +181,8 @@ class AgentConfig(BaseModel):
     temperature: float = 1.0
     # When True, every block that flows through the loop is appended to a trace.
     trace: bool = True
+    # When True, mutating tool calls are blocked until a green test baseline is observed.
+    enforce_baseline_guardrail: bool = False
 
 
 # --------------------------------------------------------------------------- #
