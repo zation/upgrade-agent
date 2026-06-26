@@ -299,7 +299,7 @@
   - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
 - [x] eval runner 已增加 `structured_report` check：
   - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
-  - `upgrade` / `upgrade-all` 支持 `--report-json` 输出结构化 `AgentReport`。
+  - `upgrade` / `upgrade-all` 支持 `--report-json` 输出结构化 `AgentReport`，并用目标 git worktree 状态填充 `changed_files`。
   - 真实 upgrade eval case 已接入 `structured_report` check。
 
 **验收标准**

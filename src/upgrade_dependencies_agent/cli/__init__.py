@@ -335,12 +335,42 @@ def _dirty_worktree_status(workdir: str) -> str | None:
     return status or None
 
 
-def _write_report_json(result: UpgradeBackboneResult, path: Path) -> None:
+def _changed_worktree_paths(workdir: str) -> list[str] | None:
+    status = _dirty_worktree_status(workdir)
+    if status is None:
+        return [] if _is_git_worktree(workdir) else None
+    return sorted({_status_path(line) for line in status.splitlines() if line.strip()})
+
+
+def _is_git_worktree(workdir: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=workdir,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def _status_path(line: str) -> str:
+    parts = line.strip().split(maxsplit=1)
+    return parts[1] if len(parts) == 2 else ""
+
+
+def _write_report_json(result: UpgradeBackboneResult, path: Path, *, workdir: str) -> None:
     if result.report is None:
         return
+    report = result.report.model_dump(mode="json")
+    changed_files = _changed_worktree_paths(workdir)
+    if changed_files is not None:
+        report["changed_files"] = changed_files
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(result.report.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
@@ -367,7 +397,7 @@ def upgrade(
         ui=RichUI(verbose=verbose),
     )
     if report_json is not None:
-        _write_report_json(result, report_json)
+        _write_report_json(result, report_json, workdir=workdir)
     raise typer.Exit(code=0 if result.ok else 1)
 
 
@@ -391,7 +421,7 @@ def upgrade_all(
         ui=RichUI(verbose=verbose),
     )
     if report_json is not None:
-        _write_report_json(result, report_json)
+        _write_report_json(result, report_json, workdir=workdir)
     raise typer.Exit(code=0 if result.ok else 1)
 
 

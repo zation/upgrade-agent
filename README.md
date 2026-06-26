@@ -98,7 +98,8 @@ uv run upgrade-dependencies-agent ask ../chai-like "your task"
 - `--model` / `-m`：覆盖 `.env` 中的默认模型。
 - `--max-iters`：限制 ReAct loop 最大迭代数。
 - `--verbose` / `-v`：显示更完整的模型输出。
-- `upgrade` / `upgrade-all` 可加 `--report-json <path>` 输出结构化 `AgentReport`。
+- `upgrade` / `upgrade-all` 可加 `--report-json <path>` 输出结构化 `AgentReport`；
+  `changed_files` 会优先来自目标 git worktree 的实际状态。
 
 ## Evals
 

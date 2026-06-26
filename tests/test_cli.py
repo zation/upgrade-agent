@@ -171,6 +171,49 @@ def test_upgrade_all_cli_writes_structured_report(monkeypatch, tmp_path):
     assert report["changed_files"] == ["package.json", "package-lock.json"]
 
 
+def test_write_report_json_populates_changed_files_from_workdir(tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    package_json = tmp_path / "package.json"
+    package_json.write_text("{}", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "baseline"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    package_json.write_text('{"changed": true}', encoding="utf-8")
+
+    report_path = tmp_path / "agent-report.json"
+    result = SimpleNamespace(
+        report=SimpleNamespace(
+            model_dump=lambda mode="python": {
+                "ok": True,
+                "summary": "done",
+                "changed_files": [],
+                "remaining_risks": [],
+            }
+        )
+    )
+
+    cli._write_report_json(result, report_path, workdir=str(tmp_path))
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["changed_files"] == ["package.json"]
+
+
 def test_stage_loop_runner_passes_runtime_scope_to_agent_config(monkeypatch):
     calls: dict[str, object] = {}
 
