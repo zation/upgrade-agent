@@ -1,7 +1,29 @@
 # ROADMAP — 后续规划
 
-> M1 ✅ M2 ✅ 已完成。以下是 M3–M6 的详细拆分，每个 item 可独立作为一个 task/session 执行。
+> 本文件是项目路线图的唯一权威来源。README 只保留简短状态摘要并链接到这里。
 > 新 session 开始时，让 agent 读 `AGENTS.md` + `docs/ARCHITECTURE.md` + 本文件即可接续。
+
+## Milestone 状态总览
+
+- **M1 ✅ ReAct core**：手写 ReAct loop + fs/shell/git/npm tools，已用 `chai-like`
+  分析任务端到端验证。
+- **M2 ✅ single-dependency upgrade**：`upgrade` CLI 已能完成真实单依赖升级；
+  `chai-like` baseline 为 28 passing / 100% coverage。
+- **M3 🚧 orchestration + cost control**：`upgrade-all` 已可按 direct dependency
+  逐个升级；`upgrade-graph` 已有 execute → verify → heal 的薄 LangGraph workflow。
+  但完整 analyze → research → plan → execute → verify graph、结构化计划节点、token
+  优化仍待完成。
+- **M4 🚧 research / RAG**：`dependency_research`、`fetch_releases`、`fetch_url`
+  和 `research-upgrade` 已提供只读研究雏形；真正的 chunk/retrieval/cache RAG
+  管道仍待完成。
+- **M5 🚧 evals + CLI**：deterministic eval runner v1 已完成；批量运行、trajectory
+  eval、失败分类、CLI JSON/dry-run 仍待完成。
+- **M6 ✅ add-tests workflow v1**：`analyze-coverage` 和 `generate-tests` 已完成首版；
+  后续质量回归放入 M10 skill regression tests。
+- **M7 ⏳ reliability guardrails + structured state**：未开始。
+- **M8 ⏳ cost/context optimization**：未开始。
+- **M9 ⏳ research quality**：未开始。
+- **M10 ⏳ skill/prompt slimming**：未开始。
 
 ## M2 完成后的关键观察（驱动后续优先级）
 
@@ -9,7 +31,8 @@
    根因：agent 反复读 `package-lock.json`（大文件）、重复 grep、每次对话携带全部历史。
    **M3 的隐含前置**：先优化 token 消耗，再做 LangGraph 编排，否则编排后更贵。
 2. **M2 证明了升级闭环可用**：baseline → research → change → verify 全跑通。
-3. **LangGraph 依赖已装但未用**：pyproject.toml 里有 `langgraph`，但还没写任何代码。
+3. **LangGraph 已有薄 workflow**：`upgrade_graph.py` 已实现 execute → verify → heal，
+   但还不是完整的多阶段升级图。
 
 ---
 
@@ -35,13 +58,17 @@
 
 **目标**：把"分析→研究→计划→执行→验证"建模为状态图。
 
-- [ ] `src/upgrade_dependencies_agent/orchestrator/state.py`：定义图状态（pydantic model）
+- [x] `src/upgrade_dependencies_agent/orchestrator/upgrade_graph.py`：薄 workflow 已完成：
+  execute → verify → self-heal → verify。
+- [x] `upgrade-graph` CLI：调用 `UpgradeGraphRunner`，为单依赖升级增加独立 verify
+  和有限 self-heal。
+- [ ] `src/upgrade_dependencies_agent/orchestrator/state.py`：定义完整图状态（pydantic model）
   - `project_profile: str` — analyze 节点的产出
   - `upgrade_plan: UpgradePlan` — plan 节点的结构化输出
   - `changes_made: list[str]` — execute 节点的变更记录
   - `test_result: TestResult` — verify 节点的结果
   - `iterations: int` — 自愈循环计数
-- [ ] `src/upgrade_dependencies_agent/orchestrator/graph.py`：StateGraph 定义
+- [ ] `src/upgrade_dependencies_agent/orchestrator/graph.py`：完整 StateGraph 定义
   ```
   analyze → research → plan → execute → verify
                                         ↓ (pass) → report (END)
@@ -54,8 +81,6 @@
 - [ ] `orchestrator/nodes/execute.py`：调 ReActLoop（full tools），执行计划
 - [ ] `orchestrator/nodes/verify.py`：跑 `npm test`，解析输出为 TestResult
 - [ ] `orchestrator/nodes/self_heal.py`：读测试报错 → 调 ReActLoop 修代码 → 返回 verify
-- [ ] CLI 新增 `--orchestrated` flag，或新命令 `upgrade-graph`，用 StateGraph 替代
-  直接 ReActLoop
 
 ### M3.3 Structured Output（计划节点需要）
 
@@ -68,13 +93,18 @@
 
 ## M4：RAG + 研究子 agent
 
+**当前状态**：`dependency_research` 已能输出 npm metadata、version span、candidate
+release-note sources；`research-upgrade` 已作为只读 breaking-change researcher
+入口存在。下一步是把"能 fetch source"升级成可缓存、可检索、可复用的 RAG brief。
+
 ### M4.1 changelog/realease-notes 抓取工具
 
-- [ ] `tools/changelog.py`：
-  - `fetch_changelog(package, from_ver, to_ver)` — 从 GitHub releases page 抓
-    release notes（用 httpx + HTML 解析）
-  - `fetch_github_releases(owner, repo)` — GitHub API 获取 releases 列表
-- [ ] 错误处理：GitHub rate limit、页面不存在、格式异常
+- [x] `tools/npm.py` `dependency_research`：输出 current/target/latest、major span、
+  repository/homepage、candidate changelog/release URLs、risk hints。
+- [x] `tools/changelog.py` `fetch_releases`：通过 GitHub API 获取 release notes。
+- [x] `tools/changelog.py` `fetch_url`：读取 changelog、migration guide、docs URL。
+- [ ] 增强错误处理：GitHub rate limit、页面不存在、格式异常、source gap 汇报。
+- [ ] `fetch_changelog(package, from_ver, to_ver)`：按 package/version span 聚合 release notes。
 
 ### M4.2 简单 RAG 管道
 
@@ -86,9 +116,11 @@
 
 ### M4.3 研究子 agent
 
-- [ ] `skills/research.py`：一个独立的 ReActLoop（用 changelog + rag 工具），
-  专门做"给定 package A 从 v1→v5，找出影响这个项目的破坏性变更"
-- [ ] 在 M3 的 LangGraph 里，`research` 节点调用这个子 agent
+- [x] `research-upgrade` CLI：只读 breaking-change researcher flow。
+- [x] `BREAKING_CHANGE_RESEARCHER` prompt：要求确认版本、读 source、搜索项目 usage、
+  输出 relevant breaking changes 和 verdict。
+- [ ] `skills/research.py`：将 researcher 从 prompt 常量沉淀为独立 skill/module。
+- [ ] 在完整 M3 graph 里，`research` 节点调用 researcher 并输出结构化 `ResearchBrief`。
 
 ---
 
@@ -118,6 +150,9 @@
 ---
 
 ## M6：补测试技能
+
+**当前状态**：add-tests workflow v1 已完成。后续不再单独扩展 M6，而是在 M5/M10
+中用 eval 和 prompt regression 保护它。
 
 ### M6.1 analyze-coverage 分析技能
 

@@ -13,17 +13,12 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 
 ## Status
 
-- **M1 ✅** — hand-written ReAct loop + fs/shell/git/npm tools. Verified
-  end-to-end: the agent analyzed `chai-like` over 10 iterations and produced a
-  real dependency-upgrade-risk report.
-- **M2 ✅** — `upgrade` command completed and verified for real single-dependency upgrades.
-- **M3 🚧** — `upgrade-all` works for direct dependency upgrades; LangGraph
-  `upgrade-graph` now adds a verify → self-heal workflow for single-dep upgrades.
-- **M5 🚧** — `dependency_research` starts the changelog/RAG track by producing
-  structured npm metadata, version-span, and candidate release-note sources;
-  `research-upgrade` adds a read-only breaking-change researcher flow.
-- **M6 🚧** — add-tests workflow started with `analyze-coverage` for read-only
-  test-gap discovery and `generate-tests` for focused test generation.
+- **M1–M2 ✅** — ReAct core and real single-dependency upgrades are complete.
+- **M3–M5 🚧** — orchestration, RAG/research, evals, and CLI polish are in progress.
+- **M6 ✅** — add-tests workflow v1 is complete (`analyze-coverage`, `generate-tests`).
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the canonical milestone status and
+next implementation order.
 
 ## Techniques covered
 
@@ -39,7 +34,7 @@ chai plugin (CommonJS, mocha 4, nyc 11, Travis-era tooling).
 | RAG | `dependency_research` seeds changelog / release-note sources | 🚧 |
 | Sub-agent | `research-upgrade` read-only breaking-change researcher | ✅ |
 | Context engineering | `core/context.py` (budget + compaction) | ✅ |
-| Evals | `evals/` | ⏳ M5 |
+| Evals | deterministic runner in `evals/runner.py` | ✅ v1 / 🚧 trajectory |
 | Observability | JSONL traces (`core/trace.py`) + rich CLI | ✅ |
 
 ## Quickstart
@@ -109,16 +104,7 @@ src/upgrade_dependencies_agent/
   orchestrator/  LangGraph workflows that compose ReAct runs
   cli/           typer entrypoint + rich live UI
 docs/            ARCHITECTURE.md (deep-dive)
-evals/           (M5) fixed tasks + runner + golden answers
+evals/           deterministic eval cases + runner
 ```
 
 Day-to-day rules for contributors/agents: see [AGENTS.md](AGENTS.md).
-
-## Roadmap
-
-- **M1 ✅** ReAct core + fs/shell/git/npm tools; verified end-to-end.
-- **M2 ✅** real single-dependency upgrade (mocha 4→11) with baseline/verify.
-- **M3 🚧** real all-dependencies upgrade with baseline/verify.
-- **M4 🚧** LangGraph `StateGraph` + `verify → self-heal` edge.
-- **M5 🚧** RAG changelog retrieval + "breaking-change researcher" sub-agent.
-- **M6 🚧** add-tests skill: coverage-gap analysis + focused test generation.
