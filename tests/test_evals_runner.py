@@ -413,3 +413,91 @@ def test_failure_reason_classifies_wrong_diff(tmp_path: Path) -> None:
 
     assert not result.ok
     assert result.failure_reason == "wrong_diff"
+
+
+def test_baseline_before_mutation_policy_passes_when_tests_run_first(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "baseline before mutation",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm test"}}}\\n'
+                        '{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trajectory_policy",
+                        "policy": "baseline_before_mutation",
+                        "path": "trace.jsonl",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.checks[0].name == "trajectory_policy:baseline_before_mutation"
+
+
+def test_baseline_before_mutation_policy_reports_baseline_missing(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "baseline missing",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('trace.jsonl').write_text("
+                        '\'{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm install mocha@11"}}}\\n'
+                        '{"type":"tool_call",'
+                        '"data":{"name":"run_command",'
+                        '"input":{"command":"npm test"}}}\\n\')'
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "trajectory_policy",
+                        "policy": "baseline_before_mutation",
+                        "path": "trace.jsonl",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "baseline_missing"
+    assert result.checks[0].name == "trajectory_policy:baseline_before_mutation"
+    assert "mutation before baseline" in result.checks[0].message

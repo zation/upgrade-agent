@@ -285,6 +285,8 @@ def _run_check(check: dict[str, Any], workdir: Path, *, env: dict[str, str]) -> 
         return _check_git_diff(check, workdir)
     if check_type == "trace_sequence":
         return _check_trace_sequence(check, workdir)
+    if check_type == "trajectory_policy":
+        return _check_trajectory_policy(check, workdir)
     return CheckResult(name=str(check_type or "unknown"), ok=False, message="unknown check type")
 
 
@@ -357,6 +359,85 @@ def _check_trace_sequence(check: dict[str, Any], workdir: Path) -> CheckResult:
         ok=True,
         message=f"matched {len(check.get('sequence', []))} ordered trace event(s)",
     )
+
+
+def _check_trajectory_policy(check: dict[str, Any], workdir: Path) -> CheckResult:
+    policy = check["policy"]
+    trace_path = Path(check["path"])
+    full = trace_path if trace_path.is_absolute() else workdir / trace_path
+    name = f"trajectory_policy:{policy}"
+    if not full.exists():
+        return CheckResult(name=name, ok=False, message=f"trace file not found: {trace_path}")
+    events = _read_trace_events(full)
+    if policy == "baseline_before_mutation":
+        return _check_baseline_before_mutation(name, events)
+    return CheckResult(name=name, ok=False, message=f"unknown trajectory policy: {policy}")
+
+
+def _check_baseline_before_mutation(name: str, events: list[dict[str, Any]]) -> CheckResult:
+    saw_baseline = False
+    for event in events:
+        if not _is_tool_call(event):
+            continue
+        if _is_test_command(event):
+            saw_baseline = True
+            continue
+        if _is_mutating_event(event):
+            if saw_baseline:
+                return CheckResult(name=name, ok=True, message="baseline observed before mutation")
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"mutation before baseline: {_event_description(event)}",
+            )
+    if saw_baseline:
+        return CheckResult(name=name, ok=True, message="baseline observed; no mutation found")
+    return CheckResult(name=name, ok=False, message="no baseline test command found")
+
+
+def _is_tool_call(event: dict[str, Any]) -> bool:
+    return event.get("type") == "tool_call" and event.get("data", {}).get("phase") != "result"
+
+
+def _is_test_command(event: dict[str, Any]) -> bool:
+    data = event.get("data", {})
+    command = data.get("input", {}).get("command", "")
+    return data.get("name") == "run_command" and _looks_like_test_command(command)
+
+
+def _looks_like_test_command(command: str) -> bool:
+    normalized = command.lower()
+    return any(
+        marker in normalized
+        for marker in ("npm test", "npm run test", "yarn test", "pnpm test", "pytest")
+    )
+
+
+def _is_mutating_event(event: dict[str, Any]) -> bool:
+    data = event.get("data", {})
+    tool = data.get("name")
+    if tool in {"write_file", "edit_file"}:
+        return True
+    if tool != "run_command":
+        return False
+    command = data.get("input", {}).get("command", "").lower()
+    mutating_markers = (
+        "npm install",
+        "npm i ",
+        "yarn add",
+        "pnpm add",
+        "git checkout",
+        "git reset",
+        "rm ",
+    )
+    return any(marker in command for marker in mutating_markers)
+
+
+def _event_description(event: dict[str, Any]) -> str:
+    data = event.get("data", {})
+    tool = data.get("name", "?")
+    command = data.get("input", {}).get("command")
+    return f"{tool} {command}" if command else tool
 
 
 def _read_trace_events(path: Path) -> list[dict[str, Any]]:
@@ -448,6 +529,11 @@ def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
     if exit_code == 124 or "timed out" in message:
         return "timeout"
     if name.startswith("trace_sequence"):
+        return "trajectory_violation"
+    if name.startswith("trajectory_policy"):
+        message = (failing.message if failing else "").lower()
+        if "baseline" in message:
+            return "baseline_missing"
         return "trajectory_violation"
     if name == "git_diff":
         return "wrong_diff"
