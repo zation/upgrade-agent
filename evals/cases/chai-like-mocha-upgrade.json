@@ -1,6 +1,9 @@
 {
   "name": "chai-like mocha upgrade",
   "target": "../chai-like",
+  "timeout": 1800,
+  "env": {},
+  "setup": [],
   "command": [
     "uv",
     "run",
@@ -9,6 +12,11 @@
     "{workdir}",
     "mocha 4 -> 11"
   ],
+  "teardown": [],
+  "budgets": {
+    "max_iterations": 40,
+    "max_input_tokens": 1000000
+  },
   "checks": [
     {
       "type": "package_json_version",
