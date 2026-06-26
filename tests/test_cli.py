@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
@@ -140,3 +141,43 @@ def test_stage_loop_runner_passes_runtime_scope_to_agent_config(monkeypatch):
     config = calls["config"]
     assert config.current_dependency == "mocha"
     assert config.allowed_files == ("package.json", "package-lock.json")
+
+
+def test_stage_loop_runner_blocks_dirty_worktree_before_first_mutation(
+    monkeypatch,
+    tmp_path,
+):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    calls: dict[str, object] = {}
+
+    class FakeLoop:
+        def __init__(self, *, client, config, tools, workdir, callbacks):
+            calls["constructed"] = True
+
+        def run(self, task):
+            calls["ran"] = True
+            return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    runner = cli._make_stage_loop_runner(
+        client=object(),
+        model="test-model",
+        max_iterations=3,
+        workdir=str(tmp_path),
+        ui=SimpleNamespace(),
+    )
+
+    result = runner(
+        cli.StageLoopRequest(
+            stage="execute",
+            system_prompt="prompt",
+            task="upgrade mocha",
+            enforce_baseline_guardrail=True,
+        )
+    )
+
+    assert not result.ok
+    assert result.error == "dirty_worktree"
+    assert "worktree is not clean" in result.final_text
+    assert "constructed" not in calls

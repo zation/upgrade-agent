@@ -290,8 +290,9 @@
 - [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
   - 文件 mutation 超出 `allowed_files` 时直接拦截。
+  - 第一次 mutation stage 前检测 target worktree 是否已有改动，dirty 时直接停止。
 - [ ] tool guardrails 后续：
-  - 检测 dirty target，避免覆盖用户已有改动。
+  - 将 dirty target 检测从 CLI stage runner 下沉为更通用的 workflow/runtime preflight。
   - 禁止危险 revert；只允许 revert 本次修改过的文件。
 - [ ] eval runner 增加 structured report check。
 
