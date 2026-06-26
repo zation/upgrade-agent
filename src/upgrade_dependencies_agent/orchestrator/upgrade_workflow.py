@@ -79,21 +79,11 @@ def run_upgrade_backbone_workflow(
         }
 
     def plan(state: UpgradeGraphState) -> UpgradeGraphState:
-        dependency = _dependency_name(target)
+        plan_artifact = _single_upgrade_plan(target, state)
         return {
             **state,
-            "current_dependency": dependency,
-            "plan": UpgradePlan(
-                dependency=dependency,
-                target_version=_target_version(target),
-                steps=[
-                    "confirm baseline",
-                    "apply minimal dependency version change",
-                    "install/update lockfile",
-                    "run verification tests",
-                ],
-                allowed_files=["package.json", "package-lock.json"],
-            ),
+            "current_dependency": plan_artifact.dependency,
+            "plan": plan_artifact,
         }
 
     def execute(state: UpgradeGraphState) -> UpgradeGraphState:
@@ -648,6 +638,23 @@ def _research_from_result(result: LoopResult, target: str) -> ResearchBrief:
             target_version=_target_version(target),
             relevant_risks=[result.final_text],
         )
+
+
+def _single_upgrade_plan(target: str, state: UpgradeGraphState) -> UpgradePlan:
+    dependency = _dependency_name(target)
+    research = state.get("research")
+    target_version = research.target_version if research else None
+    return UpgradePlan(
+        dependency=dependency,
+        target_version=target_version or _target_version(target),
+        steps=[
+            "confirm baseline",
+            "apply minimal dependency version change",
+            "install/update lockfile",
+            "run verification tests",
+        ],
+        allowed_files=["package.json", "package-lock.json"],
+    )
 
 
 def _result_passed(result: LoopResult) -> bool:
