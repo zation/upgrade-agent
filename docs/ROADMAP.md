@@ -20,7 +20,7 @@
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
-| M7 | ⏳ | Prompt / Skill Quality | 下一阶段优先做 |
+| M7 | ⏳ | Prompt / Skill 质量 | 下一阶段优先做 |
 | M8 | ⏳ | 结构化状态与运行时 Guardrails | Prompt 整理后再做 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
@@ -34,7 +34,7 @@
    原来挂在 M3-M5 下面的完整 state graph、真正 RAG、LLM judge、更多 CLI polish
    都属于后续优化，不再让 M3-M5 长期处于“标题很大但只完成一部分”的状态。
 
-2. **M7 提前做 Prompt / Skill Quality。**  
+2. **M7 提前做 Prompt / Skill 质量。**  
    当前很多行为约束仍写在长 prompt 里。先整理 prompt/skill、加 regression tests，
    可以让后续 guardrails、structured state、RAG 和成本优化更稳。
 
@@ -202,7 +202,7 @@
 
 ---
 
-## M7：Prompt / Skill Quality
+## M7：Prompt / Skill 质量
 
 **状态**：⏳ 未开始
 
@@ -373,7 +373,7 @@
 
 ## 建议执行顺序
 
-1. **M7 Prompt / Skill Quality**  
+1. **M7 Prompt / Skill 质量**  
    先把 prompt 分层和 contract tests 做掉，减少后续改动时的行为漂移。
 
 2. **M8 结构化状态与运行时 Guardrails**  

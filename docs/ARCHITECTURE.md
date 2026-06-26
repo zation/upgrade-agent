@@ -1,143 +1,183 @@
-# Architecture
+# 架构说明
 
-> Deep-dive for contributors, future agents, and resume/interview reference.
-> For day-to-day rules see [AGENTS.md](../AGENTS.md); for usage see [README.md](../README.md).
+> 面向贡献者、后续 agent 和面试复盘。日常协作规则见 [AGENTS.md](../AGENTS.md)，使用方式见
+> [README.md](../README.md)，路线图以 [ROADMAP.md](ROADMAP.md) 为准。
 
-## Design goals
+## 设计目标
 
-1. **Real tooling** — genuinely upgrade `chai-like`'s deps and verify with tests.
-2. **Maximal learning coverage** — touch every generic AI-Agent technique once,
-   so the author can study and discuss each.
-3. **Idiomatic modern Python** — uv, ruff, pydantic, strict typing.
+1. **真实可运行**：能在旧版 JS/TS 项目上分析、升级依赖、补测试，并用测试验证。
+2. **学习覆盖面广**：把常见 agent 技术做成可读实现，而不是只写概念。
+3. **分层清楚**：核心 loop 与模型、任务、CLI、工具解耦。
+4. **安全可回放**：目标项目路径受限，运行过程有 trace，eval 可复现。
 
-## Techniques → where they live
+## 技术与实现位置
 
-| Technique | File / concept | Status |
-|-----------|----------------|--------|
-| ReAct (Think–Act–Observe) | `core/react_loop.py` (hand-written loop) | ✅ M1 |
-| Function Calling / Tool Use | native `tool_use` / `tool_calls` | ✅ M1 |
-| Multi-provider abstraction | `core/llm_client.py` (Protocol + impls) | ✅ |
-| Structured output | pydantic schemas (planned for plan/report) | 🚧 |
-| Multi-step planning | `orchestrator/nodes/plan.py` | ⏳ M3 |
-| State-graph orchestration | LangGraph `StateGraph` | ⏳ M3 |
-| Self-healing / reflection | `verify → self-heal` edge | ⏳ M3 |
-| RAG | changelog/release-notes retrieval (`tools/rag.py`) | ⏳ M4 |
-| Sub-agent | "breaking-change researcher" | ⏳ M4 |
-| Context engineering | `core/context.py` (budget + compaction) | ✅ M1 |
-| Evals | `evals/` | ⏳ M5 |
-| Observability | `core/trace.py` (JSONL) + rich CLI | ✅ M1 |
+| 技术 | 实现位置 | 状态 |
+|------|----------|------|
+| ReAct loop | `core/react_loop.py` | ✅ |
+| Function calling / tool use | `core/types.py`、`core/llm_client.py` | ✅ |
+| 多模型适配 | `core/llm_client.py` | ✅ |
+| Context compaction | `core/context.py` | ✅ v1 |
+| JSONL trace | `core/trace.py` | ✅ |
+| 工具协议 | `core/types.py` 的 `Tool` / `ToolImpl` | ✅ |
+| 文件路径隔离 | `tools/_common.py` 的 `safe_resolve()` | ✅ |
+| npm / changelog research | `tools/npm.py`、`tools/changelog.py` | ✅ v1 |
+| LangGraph 编排 | `orchestrator/upgrade_graph.py` | ✅ v1 |
+| 自修复边 | `upgrade-graph` 的 verify → heal | ✅ v1 |
+| 确定性 eval | `evals/runner.py` | ✅ v1 |
+| 结构化输出与 runtime guardrails | Roadmap M8 | ⏳ |
+| 深度 RAG | Roadmap M10 | ⏳ |
 
-## The ReAct loop (the heart)
+## 分层模型
 
-`core/react_loop.py` implements the loop by hand against the provider SDK, with
-no "agent framework" mediating. Pseudocode of the core:
-
+```text
+cli / skills       组合 core 和 tools，定义具体任务
+tools              任务相关工具；只依赖 core 类型
+core               模型无关、任务无关的 agent 基础设施
+llm_client         唯一知道 provider wire format 的模块
 ```
+
+约束：
+
+- `core/` 不导入 `cli/`、`skills/` 或具体项目逻辑。
+- 新增模型 provider 只改 `core/llm_client.py`。
+- 工具通过 `Tool` 协议暴露 `.name`、`.description`、`.input_schema` 和 `.run()`。
+- 文件工具必须通过 `safe_resolve()`，不能直接拼路径访问目标项目。
+
+## ReAct loop
+
+`core/react_loop.py` 手写 Think → Act → Observe loop，不依赖 agent 框架。
+
+```text
 messages = [user task]
 repeat up to max_iterations:
-    if messages near token budget: compact older history
-    resp = llm.ask(system, messages, tools)
-    messages.append(resp.assistant)
-    surface resp text to UI (callbacks)
-    tool_uses = [blocks of type tool_use]
-    if no tool_uses:                      # model is done reasoning
-        return final_text
-    for each tool_use:
-        result = tool.run(args)           # errors captured, not fatal
-        append tool_result to a new user message
+    如果接近 token budget，则压缩旧历史
+    调用 llm.ask(system, messages, tools)
+    记录 assistant message 和 trace
+    如果没有 tool_use，则返回最终文本
+    执行所有 tool_use
+    把 tool_result 作为 user message 追加回上下文
 ```
 
-Three concerns are layered on top **without obscuring** that core:
-- **Tracing** — `Tracer.event(...)` per step → replayable JSONL.
-- **Callbacks** — `LoopCallbacks` Protocol; the rich UI implements it with zero
-  coupling (the loop never imports rich).
-- **Compaction** — `context.py` keeps head (task) + tail (working memory),
-  replaces the dropped middle with a summary stub.
+loop 上叠加了三件事，但不改变主干逻辑：
 
-**Why hand-written, not a framework?** This is the learning objective. ~120
-lines of loop teaches how *every* tool-calling agent works. LangGraph arrives
-later for *orchestration* (multi-node state machine), not to replace this loop.
+- **Trace**：每轮、每个工具调用和最终结果写入 JSONL。
+- **Callbacks**：CLI 用 `LoopCallbacks` 渲染实时输出，core 不依赖 Rich。
+- **Compaction**：长运行时保留任务和最近消息，中间历史替换为摘要 stub。
 
-## Model-agnostic layering
+## LLM 适配
 
-```
-        ┌──────────────────────────────────────────────┐
-        │  cli / skills   (compose core + tools)        │  task-specific
-        ├──────────────────────────────────────────────┤
-        │  tools          (fs/shell/git/npm)            │  ← depends on core only
-        ├──────────────────────────────────────────────┤
-        │  core           (react_loop, types, context)  │  MODEL + TASK agnostic
-        ├──────────────────────────────────────────────┤
-        │  llm_client     (Protocol + provider impls)   │  ← only place knowing wire format
-        └──────────────────────────────────────────────┘
-```
+`core/llm_client.py` 定义 `LLMClient` Protocol，并实现：
 
-**Inviolable rule:** `core/` imports nothing project- or provider-specific.
-Swapping Claude → DeepSeek → a local model touches *only* `llm_client.py`.
-This was proven: switching to DeepSeek mid-build required zero changes to the
-loop, tools, or CLI.
+- `AnthropicClient`
+- `OpenAICompatibleClient`
+- `create_client()`
 
-## Data flow (one upgrade task)
+provider 差异被限制在这一层，尤其是 tool result 映射：
 
-```
-user: upgrade chai-like "mocha 4 -> 11"
-  │
-  ▼  ReActLoop.run(task)
-  ┌─ iter 1: read package.json, run tests (baseline) ──► 28 passing
-  ├─ iter 2: npm_releases mocha; read changelog  (research breaking changes)
-  ├─ iter 3: edit_file package.json (4 → ^11); run_command npm install
-  ├─ iter 4: run_command npm test  ──► FAIL? diagnose → edit code → retry
-  └─ iter N: git_diff (confirm change); report from/to + final test result
-```
+- Anthropic 可以把多个 `tool_result` 放进一个 user message。
+- OpenAI-compatible 需要每个 `tool_call_id` 对应独立 `role: tool` message。
 
-At M3 the top level becomes a LangGraph `StateGraph` with nodes
-`analyze → research → plan → execute → verify`, and a `verify`→`self-heal`
-conditional edge. Each node internally may run a ReActLoop. The loop itself is
-unchanged.
+如果改这层，需要重点回归多工具调用场景。
 
-## Tools
+## 工具系统
 
-All tools implement `Tool` (Protocol in `core/types.py`): `.name`,
-`.description`, `.input_schema` (JSON Schema), `.run(args, ctx) -> ToolResult`.
+工具分两组：
 
-**Safety:** every filesystem tool resolves paths through `safe_resolve()`
-(`tools/_common.py`), which refuses any path escaping the target workdir. An
-agent can never read/write outside the project it operates on.
+- `read_only_tools()`：读文件、搜索、git status/diff、npm metadata、release/source fetching。
+- `default_tools()`：只读工具 + 写文件、编辑文件、运行命令。
 
-**Cost control:** `read_file` caps lines (paged via offset/limit);
-`run_command` caps captured output (head+tail); `glob`/`grep` cap match counts.
-This keeps one noisy tool call from consuming the context budget.
+当前工具能力：
 
-## Observability
+- 文件：`read_file`、`write_file`、`edit_file`、`grep`、`glob`
+- shell：`run_command`
+- git：`git_status`、`git_diff`
+- npm：`npm_outdated`、`npm_view`、`npm_releases`、`dependency_research`
+- 文档研究：`fetch_releases`、`fetch_url`
 
-`core/trace.py` writes one JSONL file per run at `traces/<run_id>.jsonl` — one
-JSON object per line per event (task, turn_start, tool_call, assistant, finish).
-Eager appends mean a crash still leaves a usable trace. Replay with `cat | jq`.
-(LangSmith export is a planned opt-in.)
+安全和成本控制：
 
-The CLI's `RichUI` is a `LoopCallbacks` implementation: it renders the run as
-streaming colored output (iteration markers, tool calls with ✓/✗, token counts,
-trace path, final result panel). The loop calls it; it never imports the loop.
+- 文件路径限制在目标项目目录内。
+- `read_file`、`run_command`、`grep`、`glob` 都有输出上限。
+- 测试失败作为普通 tool output 返回，供模型诊断和自修复。
 
-## Decisions & rationale (interview-ready)
+## CLI workflow
 
-- **Python over TS** — chosen to target AI/Agent Engineer roles where Python is
-  the default; LangGraph/CrewAI/LlamaIndex are Python-first.
-- **uv + ruff** — fastest modern Python toolchain; ruff replaces
-  black+isort+flake8 in one tool.
-- **Protocol-based LLMClient** — duck typing means a tool or a plain function
-  can be a tool, and a provider impl can be a dataclass; no heavy ABC hierarchy.
-- **edit_file uses exact-unique-match** — fails loudly on ambiguity instead of
-  guessing; more reliable than asking the model to rewrite whole files.
-- **run_command treats non-zero exit as data, not error** — failing test output
-  must be *readable* by the model to self-heal; flagging it as a tool error
-  would hide the very signal the agent needs.
+| 命令 | 说明 |
+|------|------|
+| `analyze` | 只读分析项目和依赖风险。 |
+| `analyze-coverage` | 只读分析测试缺口。 |
+| `generate-tests` | 添加聚焦测试并验证。 |
+| `research-upgrade` | 只读研究一个依赖升级。 |
+| `upgrade` | 单依赖升级闭环。 |
+| `upgrade-all` | 所有直接依赖逐个升级。 |
+| `upgrade-graph` | LangGraph execute → verify → heal 薄编排。 |
+| `ask` | 任意任务，可用 `--read-only` 限制权限。 |
 
-## Roadmap
+## LangGraph 编排
 
-- **M1 ✅** ReAct core + fs/shell/git/npm tools; verified end-to-end.
-- **M2 🚧** real single-dependency upgrade (mocha 4→11) with baseline/verify.
-- **M3** LangGraph StateGraph + `verify → self-heal` edge.
-- **M4** RAG changelog retrieval + "breaking-change researcher" sub-agent.
-- **M5** eval harness (`evals/`) + CLI polish.
-- **M6** add-tests skill.
+`orchestrator/upgrade_graph.py` 当前是薄编排，不是完整多阶段 state graph。
+
+已实现：
+
+- execute 节点执行升级。
+- verify 节点独立验证结果。
+- verify 失败时进入 heal 节点。
+- heal 次数受 `max_heal_attempts` 限制。
+- 单元测试覆盖通过、失败后修复、超过修复预算等路径。
+
+未实现的完整 analyze → research → plan → execute → verify → report graph 已移动到 Roadmap M8。
+
+## Research 能力
+
+当前是 RAG groundwork，而不是真正向量检索：
+
+- `dependency_research` 返回 current / target / latest、major span、候选 source 和风险提示。
+- `npm_view` / `npm_releases` 读取 npm metadata。
+- `fetch_releases` 读取 GitHub release notes。
+- `fetch_url` 读取 changelog、migration guide、docs 页面并转为文本。
+- `research-upgrade` 用只读工具结合项目 usage search 输出结论。
+
+真正的 chunk、ranking、cache、source coverage eval 放在 Roadmap M10。
+
+## Eval 设计
+
+`evals/runner.py` 是 deterministic eval harness：
+
+- 将目标项目复制到临时目录。
+- 初始化 git baseline。
+- 执行 case command。
+- 运行客观 checks。
+- 输出单 case 或批量 JSON summary。
+
+已支持：
+
+- `timeout`、`env`、`setup`、`teardown`、`budgets`
+- `package_json_version`
+- `command`
+- `git_diff`
+- `trace_sequence`
+- `trajectory_policy: baseline_before_mutation`
+- `trajectory_policy: single_dependency_at_a_time`
+- failure reason：`timeout`、`wrong_diff`、`test_failed`、`llm_error`、
+  `postcondition_failed`、`trajectory_violation`、`baseline_missing`、
+  `multi_dependency_upgrade`
+
+后续 eval 扩展见 Roadmap M8-M11。
+
+## 关键取舍
+
+- **手写 loop，不用 agent framework 替代核心**：这是学习目标，也是核心可解释性来源。
+- **LangGraph 只做编排**：用于展示 state machine 与 self-heal，不替代 ReAct loop。
+- **失败测试不是异常**：测试失败是模型修复问题所需的观察信号。
+- **`edit_file` 使用精确唯一匹配**：避免模型重写整文件或误改多个位置。
+- **先做 deterministic eval**：优先验证客观 outcome 和 trajectory，再考虑 LLM judge。
+
+## 当前路线图摘要
+
+- **M1-M6 ✅**：core、单依赖升级、批量/graph v1、研究工具 v1、eval v1、补测试 v1。
+- **M7 ⏳**：Prompt / Skill 质量。
+- **M8 ⏳**：结构化状态与 runtime guardrails。
+- **M9 ⏳**：成本与上下文优化。
+- **M10 ⏳**：Research / RAG 深化。
+- **M11 ⏳**：CLI / UX 与集成体验。
