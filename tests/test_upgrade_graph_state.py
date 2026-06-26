@@ -5,6 +5,7 @@ from __future__ import annotations
 from upgrade_dependencies_agent.orchestrator.state import (
     BaselineState,
     GraphPhase,
+    PackageUpgradeRecord,
     ResearchBrief,
     UpgradePlan,
     UpgradeQueue,
@@ -25,6 +26,7 @@ def test_make_upgrade_graph_state_sets_baseline_first_defaults() -> None:
     assert state["history"] == []
     assert state["changed_files"] == []
     assert state["queue"] is None
+    assert state["package_results"] == []
 
 
 def test_make_upgrade_graph_state_can_start_at_execute_for_legacy_runner() -> None:
@@ -106,3 +108,19 @@ def test_upgrade_queue_tracks_ordered_package_status() -> None:
 
     assert [item.name for item in queue.pending()] == ["mocha"]
     assert queue.model_dump(mode="json")["packages"][1]["status"] == "failed"
+
+
+def test_package_upgrade_record_is_json_serializable() -> None:
+    record = PackageUpgradeRecord(
+        name="mocha",
+        status="done",
+        summary="package tests passed",
+        changed_files=["package.json"],
+    )
+
+    assert record.model_dump(mode="json") == {
+        "name": "mocha",
+        "status": "done",
+        "summary": "package tests passed",
+        "changed_files": ["package.json"],
+    }

@@ -10,6 +10,7 @@ from __future__ import annotations
 from .state import (
     AgentReport,
     BaselineState,
+    PackageUpgradeRecord,
     ResearchBrief,
     UpgradeGraphState,
     UpgradePlan,
@@ -28,6 +29,7 @@ from .upgrade_workflow import (
 __all__ = [
     "AgentReport",
     "BaselineState",
+    "PackageUpgradeRecord",
     "ResearchBrief",
     "StageLoopRequest",
     "UpgradeBackboneResult",

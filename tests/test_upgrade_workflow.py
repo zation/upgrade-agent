@@ -202,6 +202,9 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert '"ok"' in requests[6].task
     assert result.state["queue"].packages[0].name == "mocha"
     assert [item.status for item in result.state["queue"].packages] == ["done", "done"]
+    assert [record.name for record in result.state["package_results"]] == ["mocha", "chai"]
+    assert [record.status for record in result.state["package_results"]] == ["done", "done"]
+    assert result.state["package_results"][0].summary == "package passed"
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:

@@ -73,6 +73,15 @@ class UpgradeQueue(BaseModel):
         return [item for item in self.packages if item.status == "pending"]
 
 
+class PackageUpgradeRecord(BaseModel):
+    """Observed outcome for one package attempt in a batch upgrade."""
+
+    name: str
+    status: QueueItemStatus
+    summary: str
+    changed_files: list[str] = Field(default_factory=list)
+
+
 class VerificationResult(BaseModel):
     """Structured verification result for a command or graph stage."""
 
@@ -104,6 +113,7 @@ class UpgradeGraphState(TypedDict, total=False):
     report: AgentReport | None
     current_dependency: str | None
     changed_files: list[str]
+    package_results: list[PackageUpgradeRecord]
     execute_result: LoopResult | None
     verify_result: LoopResult | None
     heal_result: LoopResult | None
@@ -132,6 +142,7 @@ def make_upgrade_graph_state(
         "report": None,
         "current_dependency": None,
         "changed_files": [],
+        "package_results": [],
         "execute_result": None,
         "verify_result": None,
         "heal_result": None,

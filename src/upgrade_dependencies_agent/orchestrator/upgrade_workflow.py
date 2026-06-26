@@ -11,6 +11,7 @@ from ..skills import BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_AL
 from .state import (
     AgentReport,
     BaselineState,
+    PackageUpgradeRecord,
     ResearchBrief,
     UpgradeGraphState,
     UpgradePlan,
@@ -237,6 +238,7 @@ def run_upgrade_all_backbone_workflow(
         queue = state.get("queue") or UpgradeQueue()
         current_state = {**state, "queue": queue}
         last_result = state.get("execute_result")
+        package_results = list(state.get("package_results", []))
 
         for index, item in enumerate(queue.pending(), start=1):
             package_state = {
@@ -273,10 +275,19 @@ def run_upgrade_all_backbone_workflow(
                 item.status = "failed"
                 item.reason = package_verification.summary
 
+            package_results.append(
+                PackageUpgradeRecord(
+                    name=item.name,
+                    status=item.status,
+                    summary=package_verification.summary,
+                    changed_files=current_state.get("changed_files", []),
+                )
+            )
             last_result = verify_result
             current_state = {
                 **package_state,
                 "queue": queue,
+                "package_results": package_results,
                 "execute_result": execute_result,
                 "verify_result": verify_result,
                 "final_result": verify_result,
