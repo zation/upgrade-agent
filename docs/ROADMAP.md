@@ -266,12 +266,15 @@
   - `upgrade-all` CLI 已迁移到 batch backbone v1。
   - 已删除 `upgrade-graph` 兼容 alias，避免重复入口。
   - baseline / research / plan / execute / verify / heal / report 已作为 graph stage 串联。
+- [x] LangGraph structured artifacts v1：
+  - verify 节点优先解析 JSON `VerificationResult`，并保留 legacy verdict fallback。
 - [ ] LangGraph structured artifacts 后续：
-  - 每个阶段通过 structured output 稳定产出 artifact。
+  - baseline / research / plan / report 阶段通过 structured output 稳定产出 artifact。
   - `upgrade-all` 的 queue 从自然语言摘要升级为结构化 package 队列，并支持更精确的逐包 state。
-  - 用 `VerificationResult` 替代自然语言 verdict / keyword 判断。
-- [ ] `core/structured.py`：封装 Claude / OpenAI-compatible 的 JSON / structured output，
-  让 graph node 能稳定产出上述 artifact schema。
+- [x] `core/structured.py` v1：从模型文本中提取 JSON object，并用 Pydantic schema 校验。
+- [ ] provider 原生 structured output：
+  - 封装 Claude / OpenAI-compatible 的 JSON / response-format 参数。
+  - 逐步移除 verify 的 legacy verdict fallback。
 - [x] runtime state v1：
   - baseline 是否已跑。
   - baseline 是否 green。
@@ -288,7 +291,7 @@
 **验收标准**
 
 - 关键流程违规不只靠 prompt，能被 runtime 拦截或 eval 标记。
-- structured output 接入后，`upgrade` 不再依赖自然语言关键词判断 pass/fail。
+- provider 原生 structured output 接入后，`upgrade` 不再依赖自然语言关键词判断 pass/fail。
 
 ---
 

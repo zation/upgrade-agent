@@ -30,7 +30,7 @@ def test_upgrade_workflow_runs_backbone_stages_with_expected_loop_contracts() ->
     def run_loop(request: StageLoopRequest) -> LoopResult:
         requests.append(request)
         if "Verify the dependency upgrade result independently" in request.task:
-            return _result("tests passed\nVERDICT: PASS")
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
         return _result("stage complete")
 
     result = run_upgrade_backbone_workflow(
@@ -54,7 +54,7 @@ def test_upgrade_workflow_runs_backbone_stages_with_expected_loop_contracts() ->
     assert requests[1].read_only is True
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[3].read_only is False
-    assert "VERDICT: PASS" in requests[3].task
+    assert '"ok"' in requests[3].task
     assert result.report is not None
     assert result.report.ok is True
 
@@ -69,8 +69,8 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
         if request.stage == "verify":
             verify_calls += 1
             if verify_calls == 1:
-                return _result("tests failed\nVERDICT: FAIL")
-            return _result("tests passed\nVERDICT: PASS")
+                return _result('{"ok": false, "command": "npm test", "summary": "tests failed"}')
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
         return _result("stage complete")
 
     result = run_upgrade_backbone_workflow(
@@ -94,13 +94,29 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
     assert "Self-heal" in heal_request.task
 
 
+def test_upgrade_workflow_keeps_legacy_verdict_fallback() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "verify":
+            return _result("tests passed\nVERDICT: PASS")
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert result.ok
+    assert result.state["verification"].ok is True
+
+
 def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     requests: list[StageLoopRequest] = []
 
     def run_loop(request: StageLoopRequest) -> LoopResult:
         requests.append(request)
         if request.stage == "verify":
-            return _result("tests passed\nVERDICT: PASS")
+            return _result('{"ok": true, "command": "npm test", "summary": "tests passed"}')
         return _result("stage complete")
 
     result = run_upgrade_all_backbone_workflow(
@@ -128,7 +144,7 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert "npm_outdated" in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
     assert "exactly one direct package at a time" in requests[2].task
-    assert "VERDICT: PASS" in requests[3].task
+    assert '"ok"' in requests[3].task
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
@@ -141,8 +157,8 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
         if request.stage == "verify":
             verify_calls += 1
             if verify_calls == 1:
-                return _result("batch failed\nVERDICT: FAIL")
-            return _result("batch passed\nVERDICT: PASS")
+                return _result('{"ok": false, "command": "npm test", "summary": "batch failed"}')
+            return _result('{"ok": true, "command": "npm test", "summary": "batch passed"}')
         return _result("stage complete")
 
     result = run_upgrade_all_backbone_workflow(

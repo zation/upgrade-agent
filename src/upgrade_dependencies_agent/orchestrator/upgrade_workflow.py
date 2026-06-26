@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..core import LoopResult
+from ..core.structured import StructuredParseError, parse_structured_text
 from ..skills import BASE_AGENT, BREAKING_CHANGE_RESEARCHER, UPGRADE, UPGRADE_ALL
 from .state import (
     AgentReport,
@@ -116,11 +117,7 @@ def run_upgrade_backbone_workflow(
         return {
             **state,
             "verify_result": result,
-            "verification": VerificationResult(
-                ok=_result_passed(result),
-                command="npm test",
-                summary=result.final_text,
-            ),
+            "verification": _verification_from_result(result),
             "final_result": result,
         }
 
@@ -244,11 +241,7 @@ def run_upgrade_all_backbone_workflow(
         return {
             **state,
             "verify_result": result,
-            "verification": VerificationResult(
-                ok=_result_passed(result),
-                command="npm test",
-                summary=result.final_text,
-            ),
+            "verification": _verification_from_result(result),
             "final_result": result,
         }
 
@@ -327,9 +320,10 @@ def _verify_task(state: UpgradeGraphState) -> str:
         "Verify the dependency upgrade result independently.\n\n"
         "Run the project's test command, read the actual output, inspect git diff, "
         "and decide whether the project is green. Do not make edits in this "
-        "verification pass. If verification fails, report the exact failing "
-        "command/output and the smallest repair needed. End your response with "
-        "`VERDICT: PASS` or `VERDICT: FAIL` on its own line.\n\n"
+        "verification pass. Return exactly one JSON object with this shape: "
+        '{"ok": true|false, "command": "npm test", "summary": "...", '
+        '"passing_count": 28|null}. If verification fails, put the exact failing '
+        "command/output and smallest repair needed in summary.\n\n"
         f"Previous step summary:\n{summary}"
     )
 
@@ -389,8 +383,9 @@ def _batch_verify_task(state: UpgradeGraphState) -> str:
         "Verify the batch dependency upgrade independently.\n\n"
         "Run the project's test command, read the actual output, inspect git diff, "
         "and decide whether the final project state is green. Do not make edits "
-        "in this verification pass. End your response with `VERDICT: PASS` or "
-        "`VERDICT: FAIL` on its own line.\n\n"
+        "in this verification pass. Return exactly one JSON object with this shape: "
+        '{"ok": true|false, "command": "npm test", "summary": "...", '
+        '"passing_count": 28|null}.\n\n'
         f"Previous step summary:\n{summary}"
     )
 
@@ -417,6 +412,17 @@ def _result_passed(result: LoopResult) -> bool:
         return False
     failure_markers = ("failing", "failed", "error", "red baseline", "cannot verify")
     return result.ok and not any(marker in text for marker in failure_markers)
+
+
+def _verification_from_result(result: LoopResult) -> VerificationResult:
+    try:
+        return parse_structured_text(result.final_text, VerificationResult)
+    except StructuredParseError:
+        return VerificationResult(
+            ok=_result_passed(result),
+            command="npm test",
+            summary=result.final_text,
+        )
 
 
 def _dependency_name(target: str) -> str:
