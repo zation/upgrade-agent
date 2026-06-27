@@ -1,201 +1,219 @@
-# 架构说明
+# Architecture
 
-> 面向贡献者、后续 agent 和面试复盘。日常协作规则见 [AGENTS.md](../AGENTS.md)，使用方式见
-> [README.md](../README.md)，路线图以 [ROADMAP.md](ROADMAP.md) 为准。
+> Contributor-facing design reference. For daily operating rules, see
+> [AGENTS.md](../AGENTS.md). For user-facing setup and CLI usage, see
+> [README.md](../README.md).
 
-## 设计目标
+## Design Goals
 
-1. **真实可运行**：能在旧版 JS/TS 项目上分析、升级依赖、补测试，并用测试验证。
-2. **学习覆盖面广**：把常见 agent 技术做成可读实现，而不是只写概念。
-3. **分层清楚**：核心 loop 与模型、任务、CLI、工具解耦。
-4. **安全可回放**：目标项目路径受限，运行过程有 trace，eval 可复现。
+1. **Run real upgrade workflows**: analyze JavaScript and TypeScript projects, upgrade
+   dependencies, add focused tests, and verify results with the target project's own
+   commands.
+2. **Keep core boundaries clear**: separate the provider-neutral loop, provider adapters,
+   tools, prompts, orchestration, and CLI.
+3. **Make runs observable and reproducible**: write JSONL traces, collect structured
+   reports, and evaluate behavior with deterministic checks.
+4. **Protect target projects**: constrain filesystem access, stop unsafe mutation
+   sequences, and avoid broad destructive revert commands.
 
-## 技术与实现位置
+## Implementation Map
 
-| 技术 | 实现位置 | 状态 |
-|------|----------|------|
-| ReAct loop | `core/react_loop.py` | ✅ |
-| Function calling / tool use | `core/types.py`、`core/llm_client.py` | ✅ |
-| 多模型适配 | `core/llm_client.py` | ✅ |
-| Context compaction | `core/context.py` | ✅ v1 |
-| JSONL trace | `core/trace.py` | ✅ |
-| 工具协议 | `core/types.py` 的 `Tool` / `ToolImpl` | ✅ |
-| 文件路径隔离 | `tools/_common.py` 的 `safe_resolve()` | ✅ |
-| npm / changelog research | `tools/npm.py`、`tools/changelog.py` | ✅ v1 |
-| LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
-| 自修复边 | `upgrade` / `upgrade-all` 的 verify → heal | ✅ v1 |
-| 确定性 eval | `evals/runner.py` | ✅ v1 |
-| 结构化输出与 runtime guardrails | `core/structured.py`、`core/runtime_state.py` | ✅ v1 |
-| 深度 RAG | `tools/changelog.py`、`tools/npm.py`、`evals/runner.py` | ✅ v1 |
+| Capability | Location | Status |
+|---|---|---|
+| ReAct loop | `core/react_loop.py` | Implemented |
+| Function calling / tool use | `core/types.py`, `core/llm_client.py` | Implemented |
+| Provider adapters | `core/llm_client.py` | Implemented |
+| Context compaction | `core/context.py` | Implemented |
+| JSONL tracing | `core/trace.py` | Implemented |
+| Tool protocol | `core/types.py` | Implemented |
+| Path isolation | `tools/_common.py` | Implemented |
+| npm and source research | `tools/npm.py`, `tools/changelog.py` | Implemented |
+| Lightweight retrieval | `tools/changelog.py` | Implemented |
+| LangGraph workflows | `orchestrator/upgrade_backbone.py`, `orchestrator/upgrade_workflow.py` | Implemented |
+| Self-healing verify loop | `upgrade`, `upgrade-all` workflows | Implemented |
+| Structured output | `core/structured.py`, `orchestrator/state.py` | Implemented |
+| Runtime guardrails | `core/runtime_state.py`, `orchestrator/preflight.py` | Implemented |
+| Deterministic evals | `evals/runner.py` | Implemented |
 
-## 分层模型
+## Layering
 
 ```text
-cli / skills       组合 core 和 tools，定义具体任务
-tools              任务相关工具；只依赖 core 类型
-core               模型无关、任务无关的 agent 基础设施
-llm_client         唯一知道 provider wire format 的模块
+cli / skills       Compose core and tools for concrete tasks.
+tools              Target-project operations; depend on core types only.
+core               Provider-neutral agent infrastructure.
+llm_client         Provider wire-format adapters.
+orchestrator       LangGraph state machines and workflow artifacts.
 ```
 
-约束：
+Rules:
 
-- `core/` 不导入 `cli/`、`skills/` 或具体项目逻辑。
-- 新增模型 provider 只改 `core/llm_client.py`。
-- 工具通过 `Tool` 协议暴露 `.name`、`.description`、`.input_schema` 和 `.run()`。
-- 文件工具必须通过 `safe_resolve()`，不能直接拼路径访问目标项目。
+- `core/` must not import `cli/`, `skills/`, or task-specific project logic.
+- New model providers should be added in `core/llm_client.py`.
+- Tools expose `.name`, `.description`, `.input_schema`, and `.run()`.
+- Filesystem tools must go through `safe_resolve()` instead of joining paths directly.
 
-## ReAct loop
+## ReAct Loop
 
-`core/react_loop.py` 手写 Think → Act → Observe loop，不依赖 agent 框架。
+`core/react_loop.py` implements a hand-written Think -> Act -> Observe loop.
 
 ```text
 messages = [user task]
 repeat up to max_iterations:
-    如果接近 token budget，则压缩旧历史
-    调用 llm.ask(system, messages, tools)
-    记录 assistant message 和 trace
-    如果没有 tool_use，则返回最终文本
-    执行所有 tool_use
-    把 tool_result 作为 user message 追加回上下文
+    compact older history when near the input budget
+    call llm.ask(system, messages, tools)
+    trace the assistant message
+    if no tool_use blocks exist, return the final text
+    execute requested tools
+    append tool_result blocks as the next user message
 ```
 
-loop 上叠加了三件事，但不改变主干逻辑：
+The loop also handles:
 
-- **Trace**：每轮、每个工具调用和最终结果写入 JSONL。
-- **Callbacks**：CLI 用 `LoopCallbacks` 渲染实时输出，core 不依赖 Rich。
-- **Compaction**：长运行时保留任务和最近消息，中间历史替换为摘要 stub。
+- **Tracing**: model turns, usage, tool calls, guardrail blocks, and final outcomes.
+- **Callbacks**: the CLI renders progress through callbacks; core does not depend on
+  Rich.
+- **Compaction**: long runs keep the initial task and recent turns while replacing older
+  history with a compact summary stub.
+- **Runtime guardrails**: mutation can be blocked before a green baseline, outside the
+  allowed file scope, or when a broad revert command is attempted.
 
-## LLM 适配
+## LLM Providers
 
-`core/llm_client.py` 定义 `LLMClient` Protocol，并实现：
+`core/llm_client.py` defines the `LLMClient` protocol and implements:
 
 - `AnthropicClient`
 - `OpenAICompatibleClient`
 - `create_client()`
 
-provider 差异被限制在这一层，尤其是 tool result 映射：
+Provider differences are isolated here. The most important difference is tool-result
+mapping:
 
-- Anthropic 可以把多个 `tool_result` 放进一个 user message。
-- OpenAI-compatible 需要每个 `tool_call_id` 对应独立 `role: tool` message。
+- Anthropic accepts multiple `tool_result` blocks in one user message.
+- OpenAI-compatible APIs require one `role: tool` message for each `tool_call_id`.
 
-如果改这层，需要重点回归多工具调用场景。
+OpenAI-compatible providers can receive native JSON Schema response formats. When a
+provider rejects JSON Schema, the client falls back to JSON object mode and local
+Pydantic validation remains the final gate.
 
-## 工具系统
+## Tool System
 
-工具分两组：
+Tool groups:
 
-- `read_only_tools()`：读文件、搜索、git status/diff、npm metadata、release/source fetching。
-- `default_tools()`：只读工具 + 写文件、编辑文件、运行命令。
+- `read_only_tools()`: file reads, search, git status/diff, npm metadata, release/source
+  fetching, and retrieval.
+- `default_tools()`: read-only tools plus file mutation, shell commands, and scoped file
+  revert.
 
-当前工具能力：
+Current tools:
 
-- 文件：`read_file`、`write_file`、`edit_file`、`grep`、`glob`
-- shell：`run_command`
-- git：`git_status`、`git_diff`
-- npm：`npm_outdated`、`npm_view`、`npm_releases`、`dependency_research`
-- 文档研究：`fetch_releases`、`fetch_url`
+- Filesystem: `read_file`, `write_file`, `edit_file`, `grep`, `glob`
+- Shell: `run_command`
+- Git: `git_status`, `git_diff`, `revert_files`
+- npm: `npm_outdated`, `npm_view`, `npm_releases`, `dependency_research`
+- Source research: `fetch_releases`, `fetch_url`, `retrieve_source_chunks`
 
-安全和成本控制：
+Safety and cost controls:
 
-- 文件路径限制在目标项目目录内。
-- `read_file`、`run_command`、`grep`、`glob` 都有输出上限。
-- 测试失败作为普通 tool output 返回，供模型诊断和自修复。
+- File paths are restricted to the target project directory.
+- `read_file`, `run_command`, `grep`, and `glob` bound their output.
+- Repeated `read_file` calls for the same slice return cache hits instead of repeating
+  full content.
+- `package-lock.json`, `lcov.info`, long changelogs, `npm test`, and `npm install`
+  outputs are summarized by default when appropriate.
+- Test failures are returned as normal tool output so the agent can diagnose and repair
+  them.
 
-## CLI workflow
+## CLI Workflows
 
-| 命令 | 说明 |
-|------|------|
-| `analyze` | 只读分析项目和依赖风险。 |
-| `analyze-coverage` | 只读分析测试缺口。 |
-| `generate-tests` | 添加聚焦测试并验证。 |
-| `research-upgrade` | 只读研究一个依赖升级。 |
-| `upgrade` | 标准单依赖升级入口，使用 LangGraph backbone。 |
-| `upgrade-all` | 批量升级入口，使用 batch backbone。 |
-| `ask` | 任意任务，可用 `--read-only` 限制权限。 |
+| Command | Purpose |
+|---|---|
+| `analyze` | Read-only project and dependency risk analysis. |
+| `analyze-coverage` | Read-only test-gap analysis. |
+| `generate-tests` | Add focused tests and verify them. |
+| `research-upgrade` | Read-only dependency upgrade research. |
+| `upgrade` | LangGraph-backed single-dependency upgrade. |
+| `upgrade-all` | Batch upgrade of direct dependencies. |
+| `ask` | Free-form task; supports `--read-only`. |
 
-## LangGraph 编排
+`upgrade` and `upgrade-all` support `--report-json`, `--json`, and `--dry-run`.
+`upgrade <project> "mocha, nyc"` runs explicit dependencies sequentially and combines
+their reports.
 
-`orchestrator/upgrade_backbone.py` 和 `orchestrator/upgrade_workflow.py`
-当前承载单依赖与批量升级的 LangGraph backbone。
+## LangGraph Workflows
 
-已实现：
+`orchestrator/upgrade_backbone.py` contains a reusable backbone. Concrete workflow logic
+lives in `orchestrator/upgrade_workflow.py`.
 
-- baseline 节点建立升级前测试基线。
-- 单依赖 research 节点只读研究 breaking changes。
-- 批量 queue 节点只读生成结构化 direct dependency 升级队列。
-- plan 节点生成最小升级计划。
-- execute 节点执行升级。
-- 批量 workflow 使用 `select_package` → `execute_package` → `verify_package` 条件边逐包推进。
-- 批量 package outcome 会写入 `package_results`，用于最终报告和后续恢复能力。
-- verify 节点独立验证结果。
-- verify 失败时进入 heal 节点。
-- report 节点汇总最终结果。
-- heal 次数受 `max_heal_attempts` 限制。
-- mutation stage 会把当前 dependency 和允许修改文件传入 runtime config。
-- runtime guardrail 会拒绝超出 `allowed_files` 的显式文件写入或编辑。
-- runtime guardrail 会拒绝危险全局 revert 命令，并提供结构化 `revert_files` 恢复路径。
-- CLI stage runner 会在第一次 mutation stage 前检查 target worktree，已有改动时停止。
-- workflow report node 会采集目标 git worktree 的实际 changed files，并写入 graph state / `AgentReport`。
-- `--report-json` 输出上述结构化 `AgentReport` 到文件，`--json` 输出到 stdout。
-- `--dry-run` 走只读 research / queue / plan 分支，不进入 execute / verify / heal mutation 流程。
-- `upgrade <project> "mocha, nyc"` 会按显式列表顺序运行单依赖 workflow，并合成总报告。
-- 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
+Implemented stages:
 
-verify 节点优先解析结构化 JSON；非 JSON verification 输出按失败处理。
+- `baseline`: establish the pre-upgrade test state.
+- `research`: read-only source-backed dependency research.
+- `queue`: build a structured direct-dependency queue for batch upgrades.
+- `plan`: build a minimal executable plan and allowed-file scope.
+- `execute`: apply a single dependency upgrade.
+- `select_package`, `execute_package`, `verify_package`: advance batch upgrades one
+  package at a time.
+- `verify` / `final_verify`: validate the resulting project state.
+- `heal`: attempt a bounded repair after failed verification.
+- `report`: collect changed files and produce an `AgentReport`.
 
-## Research 能力
+Structured artifacts include `BaselineState`, `ResearchBrief`, `UpgradePlan`,
+`UpgradeQueue`, `VerificationResult`, `PackageUpgradeRecord`, and `AgentReport`.
 
-当前是轻量 RAG / retrieval v1，而不是向量数据库：
+Verification stages fail closed: invalid or unstructured verification output is treated
+as failed verification rather than success.
 
-- `dependency_research` 返回 current / target / latest、major span、候选 source 和风险提示。
-- `dependency_research` 会发现 GitHub releases、CHANGELOG、migration guide、docs、npm README
-  等候选 source。
-- `npm_view` / `npm_releases` 读取 npm metadata。
-- `fetch_releases` 读取 GitHub release notes，并缓存同一 repo/tag 请求。
-- `fetch_url` 读取 changelog、migration guide、docs 页面并转为文本，和 retrieval 工具共享 URL
-  cache。
-- `retrieve_source_chunks` 按 heading / release section 切块，并按 breaking、removed、deprecated、
-  ESM/CJS、Node minimum、peer dependency、CLI/config 等关键词检索相关 chunk。
-- `research-upgrade` 用只读工具结合项目 usage search 输出结论；如果 source 不足，会明确说明
-  source gap 并降级为测试驱动验证。
-- eval runner 的 `research_report` check 能校验报告 source 是否真的在 trace 中读过，并检测
-  source gap 降级措辞。
+## Research and Retrieval
 
-后续如果需要语义召回，可在这个接口之上加入 embedding/vector store；当前 v1 保持无外部服务、
-可 deterministic 测试。
+The project uses lightweight retrieval rather than a vector database:
 
-## Eval 设计
+- `dependency_research` reports current, target, latest, major span, candidate sources,
+  and risk hints.
+- Source discovery includes GitHub releases, changelogs, migration guides, docs sites,
+  and npm README signals.
+- `fetch_releases` reads GitHub release notes and caches repeated repo/tag requests.
+- `fetch_url` reads changelogs, migration guides, and docs pages as text.
+- `retrieve_source_chunks` splits source text by headings or release sections and ranks
+  chunks by upgrade-risk keywords.
+- `research-upgrade` combines source evidence with project usage search. If sources are
+  unavailable or weak, it reports the gap and falls back to test-driven verification.
 
-`evals/runner.py` 是 deterministic eval harness：
+The interface can support semantic retrieval later, but the current implementation stays
+dependency-light and deterministic-test friendly.
 
-- 将目标项目复制到临时目录。
-- 初始化 git baseline。
-- 执行 case command。
-- 运行客观 checks。
-- 输出单 case 或批量 JSON summary。
+## Eval Design
 
-已支持：
+`evals/runner.py` is a deterministic eval harness:
 
-- `timeout`、`env`、`setup`、`teardown`、`budgets`
+- Copy the target project to an isolated workspace.
+- Initialize a git baseline.
+- Run the case command.
+- Execute objective checks.
+- Print JSON for single-case or batch results.
+
+Supported case features:
+
+- `timeout`, `env`, `setup`, `teardown`, `budgets`
 - `package_json_version`
 - `command`
 - `git_diff`
 - `trace_sequence`
 - `structured_report`
+- `research_report`
 - `trajectory_policy: baseline_before_mutation`
 - `trajectory_policy: single_dependency_at_a_time`
-- failure reason：`timeout`、`wrong_diff`、`test_failed`、`llm_error`、
-  `postcondition_failed`、`trajectory_violation`、`baseline_missing`、
-  `multi_dependency_upgrade`、`structured_report_failed`
 
-后续 eval 扩展见 Roadmap M8-M12。
+Failure reasons include `timeout`, `wrong_diff`, `test_failed`, `llm_error`,
+`postcondition_failed`, `trajectory_violation`, `baseline_missing`,
+`multi_dependency_upgrade`, `structured_report_failed`, `research_report_failed`, and
+`budget_exceeded`.
 
-## 关键取舍
+## Key Tradeoffs
 
-- **手写 loop，不用 agent framework 替代核心**：这是学习目标，也是核心可解释性来源。
-- **LangGraph 只做编排**：用于 state machine 与 self-heal，不替代 ReAct loop。
-- **失败测试不是异常**：测试失败是模型修复问题所需的观察信号。
-- **`edit_file` 使用精确唯一匹配**：避免模型重写整文件或误改多个位置。
-- **先做 deterministic eval**：优先验证客观 outcome 和 trajectory，再考虑 LLM judge。
-
-路线图状态不在本文重复维护，见 [ROADMAP.md](ROADMAP.md)。
+- **Hand-written loop, explicit orchestration**: the ReAct loop remains transparent while
+  LangGraph handles workflow state and conditional routing.
+- **Tests as observations**: failing test output is data for diagnosis, not a tool crash.
+- **Precise file edits**: `edit_file` requires one exact match to reduce accidental broad
+  rewrites.
+- **Deterministic evals first**: objective outcomes and trajectory checks are preferred
+  over LLM-as-judge scoring.

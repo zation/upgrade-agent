@@ -1,27 +1,28 @@
 # AGENTS.md
 
-> 本文件是给 AI agent 和人类贡献者的操作手册。动代码前先读这里。
+> Operating guide for AI agents and human contributors. Read this before changing code.
 
-## 项目是什么
+## Project Overview
 
-`upgrade-dependencies-agent` 是一个 ReAct + LangGraph agent，用来给旧版 JS/TS 项目升级依赖
-并补充测试。项目本身用 Python 写，运行时调用 LLM（Anthropic Claude 或 OpenAI-compatible
-API，例如 DeepSeek），并操作另一个磁盘目录中的目标项目。
+`upgrade-dependencies-agent` is a ReAct + LangGraph agent for upgrading dependencies
+and adding tests in legacy JavaScript and TypeScript projects. The agent itself is
+implemented in Python. At runtime it calls an LLM provider, such as Anthropic Claude or
+an OpenAI-compatible API, and operates on a separate target project directory.
 
-项目目标有两个：
+The repository contains the agent implementation only. Target projects are external
+workspaces that the agent may inspect or modify while a CLI command is running.
 
-- 做出一个真实可用的依赖升级工具。
-- 作为学习和简历项目，覆盖常见 AI Agent 工程技术。
+## Ground Rules
 
-## 基本规则
-
-1. **本仓库只改 agent 自身，不直接改目标项目。**  
-   目标项目只能由 agent 运行时操作；不要从本仓库直接编辑、提交或清理目标项目。
-2. **不要提交 secrets。**  
-   `.env` 已 gitignore，只提交 `.env.example`。
-3. **一个逻辑变更一个 commit。**  
-   使用 conventional commit，例如 `feat(scope):`、`fix(scope):`、`docs:`、`chore:`。
-4. **提交前必须通过检查。**
+1. **Only change this agent repository directly.**  
+   Do not edit, commit, or clean target project directories from this repository. Let the
+   agent operate on target projects through the CLI at runtime.
+2. **Do not commit secrets.**  
+   `.env` is gitignored. Commit `.env.example` only.
+3. **Use one logical commit per change.**  
+   Prefer conventional commits such as `feat(scope):`, `fix(scope):`, `docs:`, or
+   `chore:`.
+4. **Run checks before committing.**
 
 ```bash
 uv run ruff check .
@@ -29,103 +30,110 @@ uv run ruff format --check .
 uv run pytest -v
 ```
 
-## 常用命令
+## Common Commands
 
 ```bash
-# 安装依赖
+# Install dependencies
 uv sync --extra dev
 
-# lint / format / test
+# Lint, format, and test
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -v
 
-# 运行 agent。将 ../target-project 替换成目标项目目录。
+# Run the agent. Replace ../target-project with the target project directory.
 uv run upgrade-dependencies-agent analyze ../target-project
 uv run upgrade-dependencies-agent analyze-coverage ../target-project
 uv run upgrade-dependencies-agent generate-tests ../target-project "cover uncovered behavior"
 uv run upgrade-dependencies-agent research-upgrade ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../target-project "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade-graph ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade-all ../target-project
 uv run upgrade-dependencies-agent ask ../target-project "your task"
 
-# 运行 eval
+# Run deterministic evals
 uv run python -m evals.runner evals/cases
 ```
 
-## 目录分层
+## Directory Layout
 
 ```text
 src/upgrade_dependencies_agent/
-  core/          模型无关、任务无关的 agent core
-  tools/         agent 工具箱，依赖 core 类型
-  skills/        任务 prompt：分析、升级、研究、补测试
-  orchestrator/  LangGraph workflow
-  cli/           Typer 入口和 Rich UI
-evals/           deterministic eval harness
-docs/            架构和路线图
+  core/          provider-neutral agent core, runtime state, tracing, context
+  tools/         filesystem, shell, git, npm, changelog, and retrieval tools
+  skills/        task prompts for analysis, upgrades, research, and test generation
+  orchestrator/  LangGraph workflows and structured upgrade state
+  cli/           Typer entrypoints and Rich terminal UI
+evals/           deterministic eval harness and cases
+docs/            architecture, CI guidance, and completed milestone archive
+tests/           unit and workflow tests
 ```
 
-分层规则：
+Layering rules:
 
-- `core/` 不能导入 `cli/`、`skills/` 或具体任务逻辑。
-- `tools/` 只依赖 `core` 类型。
-- `skills/` 和 `cli/` 负责组合 core 与 tools。
-- 新增 provider 只改 `core/llm_client.py`。
+- `core/` must not import `cli/`, `skills/`, or task-specific project logic.
+- `tools/` should depend only on core types.
+- `skills/` and `cli/` compose core and tools for concrete workflows.
+- Add new LLM providers in `core/llm_client.py`.
 
-## 关键文件
+## Key Files
 
-- `core/react_loop.py`：手写 Think → Act → Observe loop，是项目核心学习产物。
-- `core/llm_client.py`：唯一了解 provider wire format 的模块。
-- `core/types.py`：Message、Tool、ToolResult 等模型无关类型。
-- `tools/_common.py`：`safe_resolve()`，所有文件工具都必须通过它限制路径。
-- `orchestrator/upgrade_graph.py`：LangGraph execute → verify → heal v1。
-- `evals/runner.py`：确定性 eval runner。
-- `docs/ROADMAP.md`：唯一权威路线图。
+- `core/react_loop.py`: hand-written Think -> Act -> Observe loop.
+- `core/llm_client.py`: the only module that knows provider wire formats.
+- `core/types.py`: provider-neutral `Message`, `Tool`, `ToolResult`, and block types.
+- `core/runtime_state.py`: runtime guardrails for baseline, mutation scope, and broad
+  reverts.
+- `tools/_common.py`: `safe_resolve()`, required for target-project filesystem access.
+- `tools/git.py`: git status, diff, and scoped `revert_files`.
+- `orchestrator/upgrade_backbone.py`: reusable LangGraph backbone.
+- `orchestrator/upgrade_workflow.py`: single-dependency and batch upgrade workflows.
+- `evals/runner.py`: deterministic eval runner.
+- `docs/ROADMAP.md`: completed milestone archive and historical planning record.
 
-## 工具定义方式
+## Tool Definition Pattern
 
-工具需要提供：
+Tools expose:
 
 - `.name`
 - `.description`
 - `.input_schema`
 - `.run(args, ctx) -> ToolResult`
 
-常规工具继承 `ToolImpl`。新工具需要注册到 `tools/__init__.py` 的
-`read_only_tools()` 或 `default_tools()`。
+Most tools inherit `ToolImpl`. New tools should be registered in `tools/__init__.py`
+through `read_only_tools()` or `default_tools()`.
 
-## 已知坑
+## Known Gotchas
 
-- **OpenAI-compatible 与 Anthropic 的 tool result 映射不同。**  
-  Anthropic 可以把多个 `tool_result` 放在一个 user message 中；OpenAI-compatible
-  需要按 `tool_call_id` 分成多个 `role: tool` message。改 `llm_client.py` 后要回归多工具调用。
-- **Python 3.13 的 `Path.write_text` 不会自动创建父目录。**  
-  写文件前先 `mkdir(parents=True, exist_ok=True)`。
-- **token 成本主要来自重复读大文件。**  
-  早期 analyze 运行曾消耗约 120k input tokens，重点大文件是 `package-lock.json`。
-- **`.env` 不是 `.env.example`。**  
-  SDK 读取 `.env`，不要只改 example。
+- **OpenAI-compatible and Anthropic tool results map differently.**  
+  Anthropic can put multiple `tool_result` blocks in one user message.
+  OpenAI-compatible APIs require one `role: tool` message per `tool_call_id`. After
+  changing `llm_client.py`, rerun multi-tool-call tests.
+- **Python 3.13 `Path.write_text` does not create parent directories.**  
+  Create parents with `mkdir(parents=True, exist_ok=True)` before writing new files.
+- **Token cost is driven by repeated large-file reads.**  
+  `read_file` has a per-run cache and summarizes large lockfiles and coverage reports by
+  default. Preserve those protections when changing file tools.
+- **`.env` is not `.env.example`.**  
+  The SDK reads `.env`; update the real local file when testing provider settings.
 
-## Provider 配置
+## Provider Configuration
 
 ```text
-LLM_PROVIDER=openai-compat      # 或 anthropic
-LLM_API_KEY=sk-...              # anthropic 时可用 ANTHROPIC_API_KEY
-# 可选：LLM_BASE_URL, LLM_MODEL
+LLM_PROVIDER=openai-compat      # or anthropic
+LLM_API_KEY=sk-...              # for OpenAI-compatible providers
+ANTHROPIC_API_KEY=sk-ant-...    # for Anthropic
+# optional: LLM_BASE_URL, LLM_MODEL
 ```
 
-默认模型：
+Default models:
 
-- `openai-compat`：`deepseek-chat`
-- `anthropic`：`claude-sonnet-4-5`
+- `openai-compat`: `deepseek-chat`
+- `anthropic`: `claude-sonnet-4-5`
 
-CLI 可用 `--model` 覆盖。
+The CLI accepts `--model` to override the configured default.
 
-## 不要做什么
+## Do Not
 
-- 不要直接编辑、提交或清理目标项目目录；让 agent 通过 CLI 在运行时操作它。
-- 不要为了省事引入新的 agent framework 替代手写 ReAct loop。
-- 不要让 `core/` 依赖具体 provider、target project、skill 或 CLI。
-- 不要绕过 `safe_resolve()` 访问目标项目文件。
+- Do not directly edit, commit, or clean target project directories.
+- Do not replace the hand-written ReAct loop with a new agent framework.
+- Do not make `core/` depend on a specific provider, target project, skill, or CLI.
+- Do not bypass `safe_resolve()` for target-project filesystem access.

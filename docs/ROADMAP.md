@@ -1,6 +1,7 @@
-# ROADMAP — 后续规划
+# ROADMAP — 完成里程碑归档
 
-> 本文件是项目路线图的唯一权威来源。README 只保留简短状态摘要并链接到这里。
+> 本文件保留项目已经完成的里程碑、历史规划判断和验收口径。README 面向用户与对外介绍，
+> ARCHITECTURE 面向贡献者解释当前实现；两者不再重复维护路线图状态。
 > 新 session 开始时，让 agent 读 `AGENTS.md`、`docs/ARCHITECTURE.md` 和本文件即可接续。
 
 ## 状态标记
@@ -10,7 +11,7 @@
 - ⏳ 未开始：已有规划，但还没有实质实现。
 - 🧊 暂缓：有价值，但暂时不进入近期开发顺序。
 
-## Milestone 总览
+## 完成里程碑总览
 
 | Milestone | 状态 | 标题 | 当前结论 |
 |-----------|------|------|----------|
@@ -25,11 +26,11 @@
 | M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
 | M10 | ✅ | Provider-native JSON Schema Output | OpenAI-compatible 已升级为 JSON Schema response format，并保留安全 fallback |
 | M11 | ✅ | Research / RAG 深化 | source discovery、cache、chunk retrieval、source coverage eval 已完成 |
-| M12 | ✅ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
+| M12 | ✅ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力已完成 |
 
 ---
 
-## 当前关键判断
+## 历史关键判断
 
 1. **M3-M5 只保留已经完成的 v1 能力。**  
    原来挂在 M3-M5 下面的完整 state graph、真正 RAG、LLM judge、更多 CLI polish
@@ -39,8 +40,8 @@
    当前很多行为约束仍写在长 prompt 里。先整理 prompt/skill、加 regression tests，
    可以让后续 guardrails、structured state、RAG 和成本优化更稳。
 
-3. **后续优化必须由 eval 驱动。**  
-   已有 deterministic eval v1，后续每个优化都应能通过 outcome、trajectory、failure reason
+3. **优化必须由 eval 驱动。**  
+   已有 deterministic eval v1，每个优化都应能通过 outcome、trajectory、failure reason
    或 cost metrics 看出是否真的变好。
 
 ---
@@ -60,7 +61,7 @@
 - [x] `core/context.py`：基础 token 估算与 compaction 框架。
 - [x] `tools/_common.py` `safe_resolve()`：限制 target project 文件访问边界。
 - [x] fs / shell / git / npm 基础工具。
-- [x] `analyze` 真实端到端运行：曾对 `chai-like` 生成依赖升级风险报告。
+- [x] `analyze` 真实端到端运行：曾对旧版 JS 目标项目生成依赖升级风险报告。
 
 **后续优化位置**
 
@@ -81,8 +82,8 @@
 - [x] 单依赖升级 prompt workflow。
 - [x] baseline-first 要求写入 prompt。
 - [x] 测试失败作为普通 tool output 返回，支持模型诊断。
-- [x] `chai-like` baseline 已确认：28 passing / 100% coverage。
-- [x] `chai-like` 真实单依赖升级跑通过。
+- [x] 旧版 JS 目标项目 baseline 已确认通过。
+- [x] 真实单依赖升级跑通过。
 
 **后续优化位置**
 
@@ -150,7 +151,7 @@
 **已完成**
 
 - [x] `evals/runner.py`：复制 target 到隔离目录，执行 case command，检查客观后置条件。
-- [x] `evals/cases/chai-like-mocha-upgrade.json`：第一个真实 case 模板。
+- [x] `evals/cases/sample-mocha-upgrade.json`：第一个真实 case 模板。
 - [x] case schema：`timeout`、`env`、`setup`、`teardown`、`budgets`。
 - [x] 多 case / 目录批量运行。
 - [x] JSON summary output。
@@ -457,31 +458,11 @@
 - [x] eval runner CI 用法文档。
 - [x] 多依赖显式指定：例如 `upgrade <project> "mocha, nyc"`。
 - [x] 清理兼容入口：已移除 `upgrade-graph` alias。
-- [x] README 与 ARCHITECTURE 根据新 milestone 同步精简。
+- [x] README 与 ARCHITECTURE 已按职责拆分：README 面向用户，ARCHITECTURE 面向贡献者。
 
 **验收标准**
 
 - 本地和 CI 都能稳定调用 eval / upgrade 命令。
-- README 不再重复 ROADMAP，只指向 canonical 文档。
+- README 不再重复路线图状态。
 
 ---
-
-## 建议执行顺序
-
-1. **M7 Prompt / Skill 质量**  
-   先把 prompt 分层和 contract tests 做掉，减少后续改动时的行为漂移。
-
-2. **M8 结构化状态与运行时 Guardrails**  
-   将最关键的流程约束迁移到 runtime 和 structured artifact。
-
-3. **M9 成本与上下文优化**  
-   基于 eval 输出的成本指标，减少 token 和重复 tool call。
-
-4. **M10 Provider-native JSON Schema Output**  
-   在结构化状态稳定后，把关键节点升级到 provider 原生 schema 输出。
-
-5. **M11 Research / RAG 深化**  
-   在 prompt、eval、结构化状态稳定后，再升级 research pipeline。
-
-6. **M12 CLI / UX 与集成体验**  
-   最后补齐 JSON、dry-run、CI 文档和使用体验。

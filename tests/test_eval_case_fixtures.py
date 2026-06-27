@@ -9,10 +9,10 @@ from evals.runner import load_case
 
 def test_core_workflow_eval_fixtures_exist_and_load() -> None:
     expected = {
-        "chai-like-mocha-upgrade.json": "upgrade",
-        "chai-like-upgrade-all.json": "upgrade-all",
-        "chai-like-research-upgrade.json": "research-upgrade",
-        "chai-like-generate-tests.json": "generate-tests",
+        "sample-mocha-upgrade.json": "upgrade",
+        "sample-upgrade-all.json": "upgrade-all",
+        "sample-research-upgrade.json": "research-upgrade",
+        "sample-generate-tests.json": "generate-tests",
     }
 
     for filename, command_name in expected.items():

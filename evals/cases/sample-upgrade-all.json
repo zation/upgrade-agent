@@ -1,6 +1,6 @@
 {
-  "name": "chai-like upgrade all direct dependencies",
-  "target": "../chai-like",
+  "name": "sample upgrade all direct dependencies",
+  "target": "../target-project",
   "timeout": 3600,
   "env": {},
   "setup": [],

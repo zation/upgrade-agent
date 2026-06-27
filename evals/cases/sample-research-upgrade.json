@@ -1,6 +1,6 @@
 {
-  "name": "chai-like mocha research upgrade",
-  "target": "../chai-like",
+  "name": "sample mocha research upgrade",
+  "target": "../target-project",
   "timeout": 1800,
   "env": {},
   "setup": [],

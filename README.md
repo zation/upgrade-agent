@@ -117,18 +117,6 @@ Key implementation choices:
 - **Observable runs**: every run can write JSONL traces with model usage, tool calls,
   compaction events, and final outcomes.
 
-## User Experience
-
-The CLI is designed for both interactive local use and automation:
-
-- Rich progress output with iteration timing, tool activity, and final run summary
-- `--json` for machine-readable stdout reports
-- `--report-json <path>` for durable `AgentReport` files
-- `--dry-run` for research and planning without mutation
-- `--model` and `--max-iters` for run-time control
-- explicit multi-dependency input, such as `upgrade <project> "mocha, nyc"`, executed
-  sequentially with combined reporting
-
 ## Installation
 
 ```bash
@@ -201,8 +189,11 @@ Common options:
 The eval runner copies a target project into an isolated workspace, runs a case command,
 and checks objective postconditions. It does not rely on an LLM judge.
 
+The bundled sample cases expect a compatible sibling target checkout at
+`../target-project`.
+
 ```bash
-uv run python -m evals.runner evals/cases/chai-like-mocha-upgrade.json
+uv run python -m evals.runner evals/cases/sample-mocha-upgrade.json
 uv run python -m evals.runner evals/cases
 ```
 

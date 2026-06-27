@@ -1,6 +1,6 @@
 {
-  "name": "chai-like generate focused tests",
-  "target": "../chai-like",
+  "name": "sample generate focused tests",
+  "target": "../target-project",
   "timeout": 1800,
   "env": {},
   "setup": [],
