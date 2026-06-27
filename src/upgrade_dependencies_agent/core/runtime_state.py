@@ -66,6 +66,37 @@ def mutation_scope_guardrail(
     )
 
 
+def package_manifest_revert_guardrail(
+    call: ToolUseBlock,
+    current_dependency: str | None,
+) -> ToolResult | None:
+    """Block whole manifest reverts while a package-scoped upgrade is running."""
+    if not current_dependency or call.name != "revert_files":
+        return None
+    paths = {
+        _normalize_relative_path(str(path))
+        for path in call.input.get("paths", [])
+        if isinstance(path, str)
+    }
+    protected = sorted(paths & {"package.json", "package-lock.json", "npm-shrinkwrap.json"})
+    if not protected:
+        return None
+    return ToolResult(
+        output=(
+            "Tool call blocked by runtime guardrail: package-level revert must not "
+            f"restore whole manifest files ({', '.join(protected)}) while upgrading "
+            f"{current_dependency}. Restore only that dependency's package entry with "
+            "edit_file, then run npm install to refresh the lockfile."
+        ),
+        is_error=True,
+        metadata={
+            "guardrail": "package_manifest_revert",
+            "current_dependency": current_dependency,
+            "requested_paths": sorted(paths),
+        },
+    )
+
+
 def dangerous_revert_guardrail(call: ToolUseBlock) -> ToolResult | None:
     """Block broad git revert commands that could discard unrelated user work."""
     if call.name != "run_command":
@@ -194,8 +225,7 @@ def _outside_project_write_target(command: str, workdir: str) -> str | None:
 def _shell_write_targets(command: str) -> list[str]:
     targets: list[str] = []
     targets.extend(
-        match.group("path")
-        for match in re.finditer(r"(?:^|\s)>>?\s*(?P<path>[^\s;&|]+)", command)
+        match.group("path") for match in re.finditer(r"(?:^|\s)>>?\s*(?P<path>[^\s;&|]+)", command)
     )
     targets.extend(
         match.group("path")

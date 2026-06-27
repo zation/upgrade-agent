@@ -40,6 +40,7 @@ from .runtime_state import (
     baseline_guardrail,
     dangerous_revert_guardrail,
     mutation_scope_guardrail,
+    package_manifest_revert_guardrail,
     shell_safety_guardrail,
     update_runtime_state,
 )
@@ -270,6 +271,15 @@ class ReActLoop:
                     guardrail=blocked.metadata.get("guardrail"),
                 )
                 return blocked
+        blocked = package_manifest_revert_guardrail(call, self.config.current_dependency)
+        if blocked is not None:
+            tracer.event(
+                "tool_call",
+                name=call.name,
+                phase="guardrail_blocked",
+                guardrail=blocked.metadata.get("guardrail"),
+            )
+            return blocked
         blocked = dangerous_revert_guardrail(call)
         if blocked is not None:
             tracer.event(
