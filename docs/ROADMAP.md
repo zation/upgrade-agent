@@ -283,8 +283,12 @@
   - [x] P2a：为 `upgrade-all` 增加 package-level result state。
   - [x] P2b：将 `upgrade-all` 内层逐包循环提升为更显式的 LangGraph 条件边。
 - [x] `core/structured.py` v1：从模型文本中提取 JSON object，并用 Pydantic schema 校验。
-- [ ] provider 原生 structured output：
-  - 封装 Claude / OpenAI-compatible 的 JSON / response-format 参数。
+- [x] provider structured-output 参数封装：
+  - `LLMClient.ask()` 支持可选 `response_format`。
+  - OpenAI-compatible provider 会透传 `response_format={"type": "json_object"}`。
+  - Anthropic provider 保持同一接口，继续依赖 prompt + schema fallback。
+- [ ] structured-output 后续：
+  - 逐步把 baseline / research / verify 等节点切到 provider 原生 JSON 模式。
   - 逐步移除 verify 的 legacy verdict fallback。
 - [x] runtime state v1：
   - baseline 是否已跑。

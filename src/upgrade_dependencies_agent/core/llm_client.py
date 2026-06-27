@@ -87,6 +87,7 @@ class LLMClient(Protocol):
         messages: list[Message],
         tools: list[dict[str, Any]],
         config: AgentConfig,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse: ...
 
 
@@ -117,6 +118,7 @@ class AnthropicClient:
         messages: list[Message],
         tools: list[dict[str, Any]],
         config: AgentConfig,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         import anthropic
 
@@ -202,6 +204,7 @@ class OpenAICompatibleClient:
         messages: list[Message],
         tools: list[dict[str, Any]],
         config: AgentConfig,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Translate our neutral types → OpenAI format, call, translate back."""
         from openai import APIStatusError
@@ -247,6 +250,8 @@ class OpenAICompatibleClient:
                 )
                 if openai_tools:
                     kwargs["tools"] = openai_tools
+                if response_format:
+                    kwargs["response_format"] = response_format
                 resp = self._client.chat.completions.create(**kwargs)
                 return self._normalize(resp)
             except APIStatusError as e:
