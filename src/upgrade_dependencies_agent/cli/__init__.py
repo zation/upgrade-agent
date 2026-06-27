@@ -39,6 +39,7 @@ from ..orchestrator import (
     run_upgrade_all_backbone_workflow,
     run_upgrade_backbone_workflow,
 )
+from ..orchestrator.preflight import check_clean_worktree, dirty_worktree_status
 from ..skills import (
     ADD_TESTS_ANALYZE,
     ADD_TESTS_GENERATE,
@@ -285,12 +286,12 @@ def _make_stage_loop_runner(
         nonlocal clean_worktree_checked
         if request.enforce_baseline_guardrail and not clean_worktree_checked:
             clean_worktree_checked = True
-            dirty_status = _dirty_worktree_status(workdir)
-            if dirty_status is not None:
+            preflight = check_clean_worktree(workdir)
+            if not preflight.ok:
                 message = (
                     "Target worktree is not clean before the first mutation stage. "
                     "Commit, stash, or remove existing changes before running an upgrade.\n\n"
-                    f"git status --porcelain:\n{dirty_status}"
+                    f"git status --porcelain:\n{preflight.details}"
                 )
                 return LoopResult(
                     final_text=message,
@@ -321,20 +322,7 @@ def _make_stage_loop_runner(
 
 
 def _dirty_worktree_status(workdir: str) -> str | None:
-    try:
-        proc = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=workdir,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if proc.returncode != 0:
-        return None
-    status = proc.stdout.strip()
-    return status or None
+    return dirty_worktree_status(workdir)
 
 
 def _changed_worktree_paths(workdir: str) -> list[str] | None:

@@ -305,7 +305,7 @@
   - 第一次 mutation stage 前检测 target worktree 是否已有改动，dirty 时直接停止。
   - 禁止 `git reset --hard`、`git checkout .`、`git restore .` 等危险全局 revert。
 - [ ] tool guardrails 后续：
-  - 将 dirty target 检测从 CLI stage runner 下沉为更通用的 workflow/runtime preflight。
+  - [x] 将 dirty target 检测从 CLI stage runner 下沉为通用 orchestrator preflight。
   - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
 - [x] eval runner 已增加 `structured_report` check：
   - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
