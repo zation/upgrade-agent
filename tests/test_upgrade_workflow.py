@@ -362,11 +362,13 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
     assert requests[2].allowed_files == ()
+    assert requests[2].max_iterations == 30
     assert "mocha" in requests[2].task
     assert "Do not upgrade any other package intentionally" in requests[2].task
     assert "mocha" in requests[3].task
     assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert "chai" in requests[4].task
+    assert requests[4].max_iterations == 30
     assert requests[6].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[6].task
     assert result.state["queue"].packages[0].name == "mocha"

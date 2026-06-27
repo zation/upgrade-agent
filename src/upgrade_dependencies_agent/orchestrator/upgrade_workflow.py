@@ -40,6 +40,7 @@ class StageLoopRequest:
     enforce_baseline_guardrail: bool = False
     current_dependency: str | None = None
     allowed_files: tuple[str, ...] = ()
+    max_iterations: int | None = None
     response_format: dict[str, object] | None = None
 
 
@@ -49,6 +50,7 @@ BASELINE_RESPONSE_FORMAT = response_format_for_schema(BaselineState)
 RESEARCH_RESPONSE_FORMAT = response_format_for_schema(ResearchBrief)
 QUEUE_RESPONSE_FORMAT = response_format_for_schema(UpgradeQueue)
 VERIFICATION_RESPONSE_FORMAT = response_format_for_schema(VerificationResult)
+PACKAGE_EXECUTE_MAX_ITERATIONS = 30
 
 
 def run_upgrade_backbone_workflow(
@@ -307,6 +309,7 @@ def run_upgrade_all_backbone_workflow(
                 enforce_baseline_guardrail=True,
                 current_dependency=item.name,
                 allowed_files=_allowed_files_from_state(package_state),
+                max_iterations=PACKAGE_EXECUTE_MAX_ITERATIONS,
             )
         )
         return {

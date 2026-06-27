@@ -385,7 +385,7 @@ def _make_stage_loop_runner(
             config=AgentConfig(
                 model=model,
                 system_prompt=request.system_prompt,
-                max_iterations=max_iterations,
+                max_iterations=request.max_iterations or max_iterations,
                 enforce_baseline_guardrail=request.enforce_baseline_guardrail,
                 current_dependency=request.current_dependency,
                 allowed_files=request.allowed_files,
