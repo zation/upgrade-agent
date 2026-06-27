@@ -353,17 +353,40 @@ def _status_path(line: str) -> str:
 
 
 def _write_report_json(result: UpgradeBackboneResult, path: Path, *, workdir: str) -> None:
-    if result.report is None:
+    report = _report_json_payload(result, workdir=workdir)
+    if report is None:
         return
-    report = result.report.model_dump(mode="json")
-    changed_files = _changed_worktree_paths(workdir)
-    if changed_files is not None:
-        report["changed_files"] = changed_files
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+
+
+def _report_json_payload(
+    result: UpgradeBackboneResult,
+    *,
+    workdir: str,
+) -> dict[str, object] | None:
+    if result.report is None:
+        return None
+    report = result.report.model_dump(mode="json")
+    changed_files = _changed_worktree_paths(workdir)
+    if changed_files is not None:
+        report["changed_files"] = changed_files
+    return report
+
+
+def _print_report_json(result: UpgradeBackboneResult, *, workdir: str) -> None:
+    report = _report_json_payload(result, workdir=workdir)
+    if report is None:
+        report = {
+            "ok": result.ok,
+            "summary": "workflow completed without a structured report",
+            "changed_files": _changed_worktree_paths(workdir) or [],
+            "remaining_risks": [],
+        }
+    typer.echo(json.dumps(report, ensure_ascii=False))
 
 
 @app.command()
@@ -374,10 +397,12 @@ def upgrade(
     max_iterations: int = typer.Option(40, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     report_json: Path | None = typer.Option(None, "--report-json"),
+    output_json: bool = typer.Option(False, "--json", help="Print AgentReport JSON to stdout."),
 ) -> None:
     """Upgrade ONE dependency: baseline → change → verify (with self-heal)."""
     workdir = _resolve_workdir(project)
-    console.rule(f"[bold]upgrading[/bold] {target} in {workdir}")
+    if not output_json:
+        console.rule(f"[bold]upgrading[/bold] {target} in {workdir}")
 
     result = _run_upgrade_backbone_cli(
         target=target,
@@ -385,10 +410,12 @@ def upgrade(
         max_iterations=max_iterations,
         max_heal_attempts=1,
         workdir=workdir,
-        ui=RichUI(verbose=verbose),
+        ui=object() if output_json else RichUI(verbose=verbose),
     )
     if report_json is not None:
         _write_report_json(result, report_json, workdir=workdir)
+    if output_json:
+        _print_report_json(result, workdir=workdir)
     raise typer.Exit(code=0 if result.ok else 1)
 
 
@@ -399,20 +426,24 @@ def upgrade_all(
     max_iterations: int = typer.Option(80, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     report_json: Path | None = typer.Option(None, "--report-json"),
+    output_json: bool = typer.Option(False, "--json", help="Print AgentReport JSON to stdout."),
 ) -> None:
     """Upgrade all direct dependencies to latest, one package at a time."""
     workdir = _resolve_workdir(project)
-    console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
+    if not output_json:
+        console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
 
     result = _run_upgrade_all_backbone_cli(
         model=model,
         max_iterations=max_iterations,
         max_heal_attempts=1,
         workdir=workdir,
-        ui=RichUI(verbose=verbose),
+        ui=object() if output_json else RichUI(verbose=verbose),
     )
     if report_json is not None:
         _write_report_json(result, report_json, workdir=workdir)
+    if output_json:
+        _print_report_json(result, workdir=workdir)
     raise typer.Exit(code=0 if result.ok else 1)
 
 

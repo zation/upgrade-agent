@@ -126,6 +126,35 @@ def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
     }
 
 
+def test_upgrade_cli_prints_machine_readable_json(monkeypatch, tmp_path):
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop, collect_changed_files):
+        return SimpleNamespace(
+            ok=True,
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": True,
+                    "summary": f"upgraded {target}",
+                    "changed_files": ["package.json"],
+                    "remaining_risks": [],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {
+        "ok": True,
+        "summary": "upgraded mocha 4 -> 11",
+        "changed_files": ["package.json"],
+        "remaining_risks": [],
+    }
+
+
 def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     calls: dict[str, object] = {}
 
@@ -171,6 +200,32 @@ def test_upgrade_all_cli_writes_structured_report(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"] == "batch passed"
+    assert report["changed_files"] == ["package.json", "package-lock.json"]
+
+
+def test_upgrade_all_cli_prints_machine_readable_json(monkeypatch, tmp_path):
+    def fake_workflow(*, max_heal_attempts: int, run_loop, collect_changed_files):
+        return SimpleNamespace(
+            ok=True,
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": True,
+                    "summary": "batch passed",
+                    "changed_files": ["package.json", "package-lock.json"],
+                    "remaining_risks": [],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0
+    report = json.loads(result.output)
     assert report["summary"] == "batch passed"
     assert report["changed_files"] == ["package.json", "package-lock.json"]
 
