@@ -804,3 +804,109 @@ def test_structured_report_check_validates_optional_failure_fields(tmp_path: Pat
     assert not result.ok
     assert result.failure_reason == "structured_report_failed"
     assert "report.failure_reason must be a string or null" in result.checks[0].message
+
+
+def test_research_report_check_requires_actual_read_source_and_gap_fallback(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+    trace = json.dumps(
+        {
+            "type": "tool_call",
+            "data": {
+                "name": "retrieve_source_chunks",
+                "input": {"url": "https://example.test/mocha/CHANGELOG.md"},
+            },
+        }
+    )
+    report = (
+        "Sources read:\n"
+        "- https://example.test/mocha/CHANGELOG.md\n\n"
+        "Source gap: migration guide was missing, so tests must drive verification.\n"
+    )
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "research report",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        f"Path('trace.jsonl').write_text({trace!r}); "
+                        f"Path('research.md').write_text({report!r})"
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "research_report",
+                        "path": "research.md",
+                        "trace_path": "trace.jsonl",
+                        "min_sources": 1,
+                        "require_source_gap_fallback": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.checks[0].name == "research_report:research.md"
+
+
+def test_research_report_check_rejects_hallucinated_sources(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+    trace = json.dumps(
+        {
+            "type": "tool_call",
+            "data": {
+                "name": "retrieve_source_chunks",
+                "input": {"url": "https://example.test/mocha/CHANGELOG.md"},
+            },
+        }
+    )
+    report = "Sources read:\n- https://hallucinated.example/mocha.md\n"
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "research report hallucination",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        f"Path('trace.jsonl').write_text({trace!r}); "
+                        f"Path('research.md').write_text({report!r})"
+                    ),
+                ],
+                "checks": [
+                    {
+                        "type": "research_report",
+                        "path": "research.md",
+                        "trace_path": "trace.jsonl",
+                        "min_sources": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "research_report_failed"
+    assert "reported unread source" in result.checks[0].message

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -317,6 +318,8 @@ def _run_check(check: dict[str, Any], workdir: Path, *, env: dict[str, str]) -> 
         return _check_trajectory_policy(check, workdir)
     if check_type == "structured_report":
         return _check_structured_report(check, workdir)
+    if check_type == "research_report":
+        return _check_research_report(check, workdir)
     return CheckResult(name=str(check_type or "unknown"), ok=False, message="unknown check type")
 
 
@@ -502,6 +505,90 @@ def _agent_report_shape_error(value: Any) -> str | None:
     if recovery_suggestions is not None and not _is_string_list(recovery_suggestions):
         return "report.recovery_suggestions must be a list of strings"
     return None
+
+
+def _check_research_report(check: dict[str, Any], workdir: Path) -> CheckResult:
+    report_path = Path(check["path"])
+    full = report_path if report_path.is_absolute() else workdir / report_path
+    name = f"research_report:{report_path.as_posix()}"
+    if not full.exists():
+        return CheckResult(name=name, ok=False, message=f"report file not found: {report_path}")
+
+    text = full.read_text(encoding="utf-8")
+    reported_urls = _extract_urls(text)
+    min_sources = int(check.get("min_sources", 1))
+    if len(reported_urls) < min_sources:
+        return CheckResult(
+            name=name,
+            ok=False,
+            message=f"reported_sources={len(reported_urls)}; expected at least {min_sources}",
+        )
+
+    trace_path = check.get("trace_path")
+    if trace_path:
+        trace_full = Path(trace_path)
+        trace_full = trace_full if trace_full.is_absolute() else workdir / trace_full
+        if not trace_full.exists():
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"trace file not found: {Path(trace_path)}",
+            )
+        read_urls = _research_source_urls_from_trace(_read_trace_events(trace_full))
+        unread = sorted(set(reported_urls) - read_urls)
+        if unread:
+            return CheckResult(
+                name=name,
+                ok=False,
+                message=f"reported unread source(s): {unread}; read={sorted(read_urls)}",
+            )
+
+    if check.get("require_source_gap_fallback") and not _has_source_gap_fallback(text):
+        return CheckResult(
+            name=name,
+            ok=False,
+            message="source gap fallback missing; expected source gap and test-driven verification",
+        )
+
+    return CheckResult(
+        name=name,
+        ok=True,
+        message=f"reported_sources={len(reported_urls)}",
+    )
+
+
+def _extract_urls(text: str) -> list[str]:
+    urls: list[str] = []
+    for match in re.finditer(r"https?://[^\s)\]>,]+", text):
+        url = match.group(0).rstrip(".,;:")
+        if url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _research_source_urls_from_trace(events: list[dict[str, Any]]) -> set[str]:
+    urls: set[str] = set()
+    for event in events:
+        if not _is_tool_call(event):
+            continue
+        data = event.get("data", {})
+        tool = data.get("name")
+        tool_input = data.get("input", {})
+        if tool in {"fetch_url", "retrieve_source_chunks"}:
+            url = tool_input.get("url")
+            if isinstance(url, str):
+                urls.add(url)
+        elif tool == "fetch_releases":
+            owner = tool_input.get("owner")
+            repo = tool_input.get("repo")
+            if isinstance(owner, str) and isinstance(repo, str):
+                urls.add(f"https://github.com/{owner}/{repo}/releases")
+    return urls
+
+
+def _has_source_gap_fallback(text: str) -> bool:
+    lower = text.lower()
+    return "source gap" in lower and "test" in lower and "verification" in lower
 
 
 def _is_string_list(value: Any) -> bool:
@@ -755,6 +842,8 @@ def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
         return "wrong_diff"
     if name.startswith("structured_report:"):
         return "structured_report_failed"
+    if name.startswith("research_report:"):
+        return "research_report_failed"
     if name.startswith("budget:"):
         return "budget_exceeded"
     if name.startswith("command:"):
