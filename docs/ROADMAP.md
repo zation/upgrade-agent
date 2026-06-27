@@ -298,7 +298,7 @@
   - [x] stage request / agent config 已携带本轮允许修改的文件范围。
   - [x] runtime guardrail 已使用 `allowed_files` 限制 `write_file` / `edit_file` 范围。
   - [x] runtime guardrail 已禁止危险全局 revert 命令。
-  - [ ] runtime guardrail 进一步约束其他命令型 mutation 的影响范围。
+  - [x] runtime guardrail 已覆盖更多包管理器 mutation 命令：`npm update/remove`、`pnpm add/remove/update`、`yarn add/remove/upgrade`。
 - [x] tool guardrails v1：
   - 没有 green baseline 前禁止 `write_file`、`edit_file`、`npm install` 等 mutating action。
   - 文件 mutation 超出 `allowed_files` 时直接拦截。

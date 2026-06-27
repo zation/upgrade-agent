@@ -23,11 +23,11 @@ def baseline_guardrail(call: ToolUseBlock, state: RuntimeState) -> ToolResult | 
     """Return a blocking result when a mutating call happens before green baseline."""
     if state.baseline_green:
         return None
-    if call.name in MUTATING_FS_TOOLS or _is_npm_install(call):
+    if call.name in MUTATING_FS_TOOLS or _is_package_manager_mutation(call):
         return ToolResult(
             output=(
                 "Tool call blocked by runtime guardrail: establish a green test "
-                "baseline before mutating files or installing packages."
+                "baseline before mutating files or changing packages."
             ),
             is_error=True,
             metadata={"guardrail": "baseline_before_mutation"},
@@ -92,11 +92,16 @@ def update_runtime_state(call: ToolUseBlock, result: ToolResult, state: RuntimeS
     state.baseline_green = result.metadata.get("exit_code") == 0
 
 
-def _is_npm_install(call: ToolUseBlock) -> bool:
+def _is_package_manager_mutation(call: ToolUseBlock) -> bool:
     if call.name != "run_command":
         return False
     command = str(call.input.get("command", ""))
-    return bool(re.search(r"\bnpm\s+(install|i|add)\b", command))
+    normalized = " ".join(command.strip().split())
+    return bool(
+        re.search(r"\bnpm\s+(install|i|add|update|uninstall|remove|rm)\b", normalized)
+        or re.search(r"\bpnpm\s+(add|install|i|update|remove|rm)\b", normalized)
+        or re.search(r"\byarn\s+(add|install|upgrade|remove)\b", normalized)
+    )
 
 
 def _looks_like_test_command(command: str) -> bool:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from upgrade_dependencies_agent.core import (
     AgentConfig,
     LLMResponse,
@@ -89,6 +91,42 @@ def test_baseline_guardrail_blocks_package_install_before_green_baseline(
     )
 
     result = loop.run("install before baseline")
+
+    assert result.ok
+    assert "blocked by runtime guardrail" in _last_tool_result_content(result)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "npm update mocha",
+        "npm uninstall chai",
+        "npm rm nyc",
+        "pnpm add mocha@11",
+        "pnpm remove chai",
+        "yarn add mocha@11",
+        "yarn remove chai",
+        "yarn upgrade mocha",
+    ],
+)
+def test_baseline_guardrail_blocks_package_mutation_commands_before_green_baseline(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": command}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=2, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("package mutation before baseline")
 
     assert result.ok
     assert "blocked by runtime guardrail" in _last_tool_result_content(result)
