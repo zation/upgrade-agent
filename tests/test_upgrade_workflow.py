@@ -15,7 +15,9 @@ from upgrade_dependencies_agent.orchestrator.state import (
 from upgrade_dependencies_agent.orchestrator.upgrade_workflow import (
     StageLoopRequest,
     run_upgrade_all_backbone_workflow,
+    run_upgrade_all_dry_run_workflow,
     run_upgrade_backbone_workflow,
+    run_upgrade_dry_run_workflow,
 )
 
 
@@ -269,6 +271,28 @@ def test_upgrade_workflow_report_collects_changed_files() -> None:
     assert result.state["changed_files"] == ["package-lock.json", "package.json"]
 
 
+def test_upgrade_dry_run_only_researches_and_plans() -> None:
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        requests.append(request)
+        return _result(
+            '{"package": "mocha", "current_version": "4.0.0", '
+            '"target_version": "11.0.0", "sources": ["https://example.test"], '
+            '"relevant_risks": ["node minimum changed"]}'
+        )
+
+    result = run_upgrade_dry_run_workflow("mocha 4 -> 11", run_loop=run_loop)
+
+    assert result.ok
+    assert [request.stage for request in requests] == ["research"]
+    assert requests[0].read_only is True
+    assert result.state["plan"].dependency == "mocha"
+    assert result.report is not None
+    assert result.report.summary == "Dry run complete for mocha 4 -> 11"
+    assert result.report.changed_files == []
+
+
 def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     requests: list[StageLoopRequest] = []
 
@@ -489,3 +513,25 @@ def test_upgrade_all_workflow_report_collects_changed_files() -> None:
     assert result.report is not None
     assert result.report.changed_files == ["package.json"]
     assert result.state["changed_files"] == ["package.json"]
+
+
+def test_upgrade_all_dry_run_only_builds_queue_and_plan() -> None:
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        requests.append(request)
+        return _result(
+            '{"packages": [{"name": "mocha", "current_version": "4.0.0", '
+            '"target_version": "11.0.0", "dependency_type": "devDependency", '
+            '"status": "pending", "reason": null}]}'
+        )
+
+    result = run_upgrade_all_dry_run_workflow(run_loop=run_loop)
+
+    assert result.ok
+    assert [request.stage for request in requests] == ["queue"]
+    assert requests[0].read_only is True
+    assert result.state["queue"].packages[0].name == "mocha"
+    assert result.report is not None
+    assert result.report.summary == "Dry run complete for all direct dependencies"
+    assert result.report.changed_files == []

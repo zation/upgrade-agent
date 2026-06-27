@@ -162,6 +162,53 @@ def run_upgrade_backbone_workflow(
     return runner.run(f"Upgrade the dependency: {target}")
 
 
+def run_upgrade_dry_run_workflow(
+    target: str,
+    *,
+    run_loop: StageLoopRunner,
+) -> UpgradeBackboneResult:
+    """Plan a single dependency upgrade without mutating the target project."""
+    state = make_upgrade_graph_state(
+        f"Dry-run upgrade plan: {target}",
+        max_heal_attempts=0,
+        phase="research",
+    )
+    research_result = run_loop(
+        StageLoopRequest(
+            stage="research",
+            system_prompt=BREAKING_CHANGE_RESEARCHER,
+            task=_research_task(target),
+            read_only=True,
+            response_format=RESEARCH_RESPONSE_FORMAT,
+        )
+    )
+    state = {
+        **state,
+        "research": _research_from_result(research_result, target),
+        "history": [*state.get("history", []), "research"],
+    }
+    plan = _single_upgrade_plan(target, state)
+    report = _dry_run_agent_report(
+        summary=f"Dry run complete for {target}",
+        risks=state["research"].relevant_risks if state.get("research") else [],
+    )
+    state = {
+        **state,
+        "phase": "done",
+        "current_dependency": plan.dependency,
+        "plan": plan,
+        "report": report,
+        "history": [*state.get("history", []), "plan", "report"],
+    }
+    return UpgradeBackboneResult(
+        ok=report.ok,
+        state=state,
+        report=report,
+        heal_attempts=0,
+        history=tuple(state.get("history", [])),
+    )
+
+
 def run_upgrade_all_backbone_workflow(
     *,
     max_heal_attempts: int,
@@ -411,6 +458,61 @@ def run_upgrade_all_backbone_workflow(
         state=state,
         report=report_result,
         heal_attempts=state.get("heal_attempts", 0),
+        history=tuple(state.get("history", [])),
+    )
+
+
+def run_upgrade_all_dry_run_workflow(
+    *,
+    run_loop: StageLoopRunner,
+) -> UpgradeBackboneResult:
+    """Plan a batch upgrade queue without mutating the target project."""
+    target = "all direct dependencies"
+    state = make_upgrade_graph_state(
+        "Dry-run upgrade plan: all direct dependencies",
+        max_heal_attempts=0,
+        phase="research",
+    )
+    queue_result = run_loop(
+        StageLoopRequest(
+            stage="queue",
+            system_prompt=BASE_AGENT,
+            task=_batch_queue_task(),
+            read_only=True,
+            response_format=QUEUE_RESPONSE_FORMAT,
+        )
+    )
+    queue = _queue_from_result(queue_result)
+    plan = UpgradePlan(
+        dependency=target,
+        steps=[
+            "confirm green baseline",
+            "upgrade one package at a time from the planned queue",
+            "verify after each package",
+            "run final verification",
+        ],
+        allowed_files=["package.json", "package-lock.json"],
+    )
+    package_names = ", ".join(item.name for item in queue.packages)
+    risks = [f"Planned packages: {package_names}"] if package_names else []
+    report = _dry_run_agent_report(
+        summary="Dry run complete for all direct dependencies",
+        risks=risks,
+    )
+    state = {
+        **state,
+        "phase": "done",
+        "current_dependency": target,
+        "queue": queue,
+        "plan": plan,
+        "report": report,
+        "history": [*state.get("history", []), "queue", "plan", "report"],
+    }
+    return UpgradeBackboneResult(
+        ok=report.ok,
+        state=state,
+        report=report,
+        heal_attempts=0,
         history=tuple(state.get("history", [])),
     )
 
@@ -716,6 +818,16 @@ def _single_agent_report(
         remaining_risks=[] if ok else ["upgrade verification failed"],
         failure_reason=None if ok else "verification_failed",
         recovery_suggestions=[] if ok else [f"Inspect verification failure: {summary}"],
+    )
+
+
+def _dry_run_agent_report(*, summary: str, risks: list[str]) -> AgentReport:
+    return AgentReport(
+        ok=True,
+        summary=summary,
+        changed_files=[],
+        remaining_risks=risks,
+        recovery_suggestions=[],
     )
 
 

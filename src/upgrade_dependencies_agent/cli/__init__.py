@@ -37,7 +37,9 @@ from ..orchestrator import (
     StageLoopRequest,
     UpgradeBackboneResult,
     run_upgrade_all_backbone_workflow,
+    run_upgrade_all_dry_run_workflow,
     run_upgrade_backbone_workflow,
+    run_upgrade_dry_run_workflow,
 )
 from ..orchestrator.preflight import check_clean_worktree, dirty_worktree_status
 from ..skills import (
@@ -249,6 +251,27 @@ def _run_upgrade_backbone_cli(
     return result
 
 
+def _run_upgrade_dry_run_cli(
+    *,
+    target: str,
+    model: str,
+    max_iterations: int,
+    workdir: str,
+    ui: RichUI,
+) -> UpgradeBackboneResult:
+    client = create_client()
+    return run_upgrade_dry_run_workflow(
+        target,
+        run_loop=_make_stage_loop_runner(
+            client=client,
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        ),
+    )
+
+
 def _run_upgrade_all_backbone_cli(
     *,
     model: str,
@@ -270,6 +293,25 @@ def _run_upgrade_all_backbone_cli(
         collect_changed_files=lambda: _changed_worktree_paths(workdir),
     )
     return result
+
+
+def _run_upgrade_all_dry_run_cli(
+    *,
+    model: str,
+    max_iterations: int,
+    workdir: str,
+    ui: RichUI,
+) -> UpgradeBackboneResult:
+    client = create_client()
+    return run_upgrade_all_dry_run_workflow(
+        run_loop=_make_stage_loop_runner(
+            client=client,
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        ),
+    )
 
 
 def _make_stage_loop_runner(
@@ -398,20 +440,36 @@ def upgrade(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     report_json: Path | None = typer.Option(None, "--report-json"),
     output_json: bool = typer.Option(False, "--json", help="Print AgentReport JSON to stdout."),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Research and plan only; do not execute mutating upgrade stages.",
+    ),
 ) -> None:
     """Upgrade ONE dependency: baseline → change → verify (with self-heal)."""
     workdir = _resolve_workdir(project)
     if not output_json:
-        console.rule(f"[bold]upgrading[/bold] {target} in {workdir}")
+        action = "planning upgrade" if dry_run else "upgrading"
+        console.rule(f"[bold]{action}[/bold] {target} in {workdir}")
 
-    result = _run_upgrade_backbone_cli(
-        target=target,
-        model=model,
-        max_iterations=max_iterations,
-        max_heal_attempts=1,
-        workdir=workdir,
-        ui=object() if output_json else RichUI(verbose=verbose),
-    )
+    ui = object() if output_json else RichUI(verbose=verbose)
+    if dry_run:
+        result = _run_upgrade_dry_run_cli(
+            target=target,
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        )
+    else:
+        result = _run_upgrade_backbone_cli(
+            target=target,
+            model=model,
+            max_iterations=max_iterations,
+            max_heal_attempts=1,
+            workdir=workdir,
+            ui=ui,
+        )
     if report_json is not None:
         _write_report_json(result, report_json, workdir=workdir)
     if output_json:
@@ -427,19 +485,34 @@ def upgrade_all(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     report_json: Path | None = typer.Option(None, "--report-json"),
     output_json: bool = typer.Option(False, "--json", help="Print AgentReport JSON to stdout."),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Build the upgrade queue and plan only; do not execute mutating upgrade stages.",
+    ),
 ) -> None:
     """Upgrade all direct dependencies to latest, one package at a time."""
     workdir = _resolve_workdir(project)
     if not output_json:
-        console.rule(f"[bold]upgrading all dependencies[/bold] in {workdir}")
+        action = "planning all dependency upgrades" if dry_run else "upgrading all dependencies"
+        console.rule(f"[bold]{action}[/bold] in {workdir}")
 
-    result = _run_upgrade_all_backbone_cli(
-        model=model,
-        max_iterations=max_iterations,
-        max_heal_attempts=1,
-        workdir=workdir,
-        ui=object() if output_json else RichUI(verbose=verbose),
-    )
+    ui = object() if output_json else RichUI(verbose=verbose)
+    if dry_run:
+        result = _run_upgrade_all_dry_run_cli(
+            model=model,
+            max_iterations=max_iterations,
+            workdir=workdir,
+            ui=ui,
+        )
+    else:
+        result = _run_upgrade_all_backbone_cli(
+            model=model,
+            max_iterations=max_iterations,
+            max_heal_attempts=1,
+            workdir=workdir,
+            ui=ui,
+        )
     if report_json is not None:
         _write_report_json(result, report_json, workdir=workdir)
     if output_json:

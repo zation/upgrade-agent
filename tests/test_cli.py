@@ -155,6 +155,40 @@ def test_upgrade_cli_prints_machine_readable_json(monkeypatch, tmp_path):
     }
 
 
+def test_upgrade_cli_dry_run_uses_read_only_planner(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    def fake_dry_run_workflow(target: str, *, run_loop):
+        calls["target"] = target
+        calls["run_loop"] = run_loop
+        return SimpleNamespace(
+            ok=True,
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": True,
+                    "summary": "dry run complete",
+                    "changed_files": [],
+                    "remaining_risks": ["node minimum changed"],
+                }
+            ),
+        )
+
+    def fail_mutating_workflow(*args, **kwargs):
+        raise AssertionError("mutating workflow must not run during dry-run")
+
+    monkeypatch.setattr(cli, "run_upgrade_dry_run_workflow", fake_dry_run_workflow, raising=False)
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_mutating_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--dry-run", "--json"])
+
+    assert result.exit_code == 0
+    assert calls["target"] == "mocha 4 -> 11"
+    assert callable(calls["run_loop"])
+    assert json.loads(result.output)["summary"] == "dry run complete"
+
+
 def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     calls: dict[str, object] = {}
 
@@ -228,6 +262,48 @@ def test_upgrade_all_cli_prints_machine_readable_json(monkeypatch, tmp_path):
     report = json.loads(result.output)
     assert report["summary"] == "batch passed"
     assert report["changed_files"] == ["package.json", "package-lock.json"]
+
+
+def test_upgrade_all_cli_dry_run_uses_read_only_planner(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    def fake_dry_run_workflow(*, run_loop):
+        calls["run_loop"] = run_loop
+        return SimpleNamespace(
+            ok=True,
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": True,
+                    "summary": "batch dry run complete",
+                    "changed_files": [],
+                    "remaining_risks": ["Planned packages: mocha"],
+                }
+            ),
+        )
+
+    def fail_mutating_workflow(*args, **kwargs):
+        raise AssertionError("mutating workflow must not run during dry-run")
+
+    monkeypatch.setattr(
+        cli,
+        "run_upgrade_all_dry_run_workflow",
+        fake_dry_run_workflow,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_upgrade_all_backbone_workflow",
+        fail_mutating_workflow,
+        raising=False,
+    )
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--dry-run", "--json"])
+
+    assert result.exit_code == 0
+    assert callable(calls["run_loop"])
+    assert json.loads(result.output)["summary"] == "batch dry run complete"
 
 
 def test_write_report_json_populates_changed_files_from_workdir(tmp_path):

@@ -23,7 +23,9 @@ from .upgrade_backbone import UpgradeBackboneResult, UpgradeBackboneRunner
 from .upgrade_workflow import (
     StageLoopRequest,
     run_upgrade_all_backbone_workflow,
+    run_upgrade_all_dry_run_workflow,
     run_upgrade_backbone_workflow,
+    run_upgrade_dry_run_workflow,
 )
 
 __all__ = [
@@ -41,5 +43,7 @@ __all__ = [
     "VerificationResult",
     "make_upgrade_graph_state",
     "run_upgrade_all_backbone_workflow",
+    "run_upgrade_all_dry_run_workflow",
     "run_upgrade_backbone_workflow",
+    "run_upgrade_dry_run_workflow",
 ]
