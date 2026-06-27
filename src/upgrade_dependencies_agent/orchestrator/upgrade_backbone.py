@@ -70,7 +70,14 @@ class UpgradeBackboneRunner:
         graph.add_node("heal", self._heal_node)
         graph.add_node("report", self._report_node)
         graph.set_entry_point("baseline")
-        graph.add_edge("baseline", "research")
+        graph.add_conditional_edges(
+            "baseline",
+            self._route_after_baseline,
+            {
+                "research": "research",
+                "report": "report",
+            },
+        )
         graph.add_edge("research", "plan")
         graph.add_edge("plan", "execute")
         graph.add_edge("execute", "verify")
@@ -128,6 +135,10 @@ class UpgradeBackboneRunner:
         if state.get("heal_attempts", 0) >= state.get("max_heal_attempts", 0):
             return "report"
         return "heal"
+
+    def _route_after_baseline(self, state: UpgradeGraphState) -> str:
+        baseline = state.get("baseline")
+        return "research" if baseline and baseline.green else "report"
 
     @staticmethod
     def _stage(
