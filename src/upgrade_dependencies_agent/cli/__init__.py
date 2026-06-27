@@ -34,6 +34,7 @@ from rich.console import Console
 
 from ..core import AgentConfig, LoopResult, ReActLoop, create_client
 from ..orchestrator import (
+    AgentReport,
     StageLoopRequest,
     UpgradeBackboneResult,
     run_upgrade_all_backbone_workflow,
@@ -272,6 +273,41 @@ def _run_upgrade_dry_run_cli(
     )
 
 
+def _run_explicit_upgrade_targets_cli(
+    *,
+    targets: list[str],
+    model: str,
+    max_iterations: int,
+    max_heal_attempts: int,
+    workdir: str,
+    ui: RichUI,
+    dry_run: bool,
+) -> UpgradeBackboneResult:
+    results: list[UpgradeBackboneResult] = []
+    for target in targets:
+        if dry_run:
+            result = _run_upgrade_dry_run_cli(
+                target=target,
+                model=model,
+                max_iterations=max_iterations,
+                workdir=workdir,
+                ui=ui,
+            )
+        else:
+            result = _run_upgrade_backbone_cli(
+                target=target,
+                model=model,
+                max_iterations=max_iterations,
+                max_heal_attempts=max_heal_attempts,
+                workdir=workdir,
+                ui=ui,
+            )
+        results.append(result)
+        if not result.ok:
+            break
+    return _combine_explicit_upgrade_results(targets, results, dry_run=dry_run)
+
+
 def _run_upgrade_all_backbone_cli(
     *,
     model: str,
@@ -431,6 +467,62 @@ def _print_report_json(result: UpgradeBackboneResult, *, workdir: str) -> None:
     typer.echo(json.dumps(report, ensure_ascii=False))
 
 
+def _explicit_upgrade_targets(target: str) -> list[str]:
+    return [part.strip() for part in target.split(",") if part.strip()]
+
+
+def _combine_explicit_upgrade_results(
+    targets: list[str],
+    results: list[UpgradeBackboneResult],
+    *,
+    dry_run: bool,
+) -> UpgradeBackboneResult:
+    ok = len(results) == len(targets) and all(result.ok for result in results)
+    reports = [
+        result.report.model_dump(mode="json") for result in results if result.report is not None
+    ]
+    changed_files = sorted(
+        {changed_file for report in reports for changed_file in report.get("changed_files", [])}
+    )
+    remaining_risks = [
+        f"{target}: {risk}"
+        for target, report in zip(targets, reports, strict=False)
+        for risk in report.get("remaining_risks", [])
+    ]
+    recovery_suggestions = [
+        suggestion for report in reports for suggestion in report.get("recovery_suggestions", [])
+    ]
+    completed_targets = targets[: len(results)]
+    action = "Planned" if dry_run else "Upgraded"
+    summary = (
+        f"{action} {len(completed_targets)} explicit dependencies: {', '.join(completed_targets)}"
+    )
+    report = AgentReport(
+        ok=ok,
+        summary=summary,
+        changed_files=changed_files,
+        remaining_risks=remaining_risks,
+        failure_reason=None if ok else "explicit_dependency_failed",
+        recovery_suggestions=recovery_suggestions,
+    )
+    history = tuple(
+        history_item for result in results for history_item in getattr(result, "history", ())
+    )
+    return UpgradeBackboneResult(
+        ok=ok,
+        state={
+            "task": summary,
+            "phase": "done",
+            "report": report,
+            "changed_files": changed_files,
+            "history": list(history),
+        },
+        report=report,
+        heal_attempts=sum(getattr(result, "heal_attempts", 0) for result in results),
+        history=history,
+    )
+
+
 @app.command()
 def upgrade(
     project: Path = typer.Argument(..., help="Path to the target project."),
@@ -453,7 +545,18 @@ def upgrade(
         console.rule(f"[bold]{action}[/bold] {target} in {workdir}")
 
     ui = object() if output_json else RichUI(verbose=verbose)
-    if dry_run:
+    explicit_targets = _explicit_upgrade_targets(target)
+    if len(explicit_targets) > 1:
+        result = _run_explicit_upgrade_targets_cli(
+            targets=explicit_targets,
+            model=model,
+            max_iterations=max_iterations,
+            max_heal_attempts=1,
+            workdir=workdir,
+            ui=ui,
+            dry_run=dry_run,
+        )
+    elif dry_run:
         result = _run_upgrade_dry_run_cli(
             target=target,
             model=model,

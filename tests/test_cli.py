@@ -189,6 +189,71 @@ def test_upgrade_cli_dry_run_uses_read_only_planner(monkeypatch, tmp_path):
     assert json.loads(result.output)["summary"] == "dry run complete"
 
 
+def test_upgrade_cli_runs_explicit_dependency_list_sequentially(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop, collect_changed_files):
+        calls.append(target)
+        return SimpleNamespace(
+            ok=True,
+            heal_attempts=0,
+            history=("baseline", "research", "report"),
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": True,
+                    "summary": f"upgraded {target}",
+                    "changed_files": ["package.json"],
+                    "remaining_risks": [],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
+
+    assert result.exit_code == 0
+    assert calls == ["mocha", "nyc"]
+    report = json.loads(result.output)
+    assert report["ok"] is True
+    assert report["summary"] == "Upgraded 2 explicit dependencies: mocha, nyc"
+    assert report["changed_files"] == ["package.json"]
+
+
+def test_upgrade_cli_reports_failed_explicit_dependency(monkeypatch, tmp_path):
+    def fake_workflow(target: str, *, max_heal_attempts: int, run_loop, collect_changed_files):
+        ok = target == "mocha"
+        return SimpleNamespace(
+            ok=ok,
+            heal_attempts=0,
+            history=("baseline", "research", "report"),
+            report=SimpleNamespace(
+                model_dump=lambda mode="python": {
+                    "ok": ok,
+                    "summary": f"{target} {'passed' if ok else 'failed'}",
+                    "changed_files": ["package.json"],
+                    "remaining_risks": [] if ok else ["nyc verification failed"],
+                    "failure_reason": None if ok else "verification_failed",
+                    "recovery_suggestions": [] if ok else ["Inspect nyc"],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
+    monkeypatch.setattr(cli, "create_client", lambda: object())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
+
+    assert result.exit_code == 1
+    report = json.loads(result.output)
+    assert report["ok"] is False
+    assert report["failure_reason"] == "explicit_dependency_failed"
+    assert "nyc: nyc verification failed" in report["remaining_risks"]
+
+
 def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
     calls: dict[str, object] = {}
 
