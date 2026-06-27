@@ -11,6 +11,8 @@ still looks great in a terminal.
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console
@@ -29,10 +31,20 @@ class RichUI:
     Pass an instance as ``ReActLoop(..., callbacks=RichUI())``.
     """
 
-    def __init__(self, console: Console | None = None, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        console: Console | None = None,
+        verbose: bool = False,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.console = console or Console()
         self.verbose = verbose
+        self._clock = clock
         self._iter = 0
+        self._started_at: float | None = None
+        self._tool_calls = 0
+        self._tool_ok = 0
+        self._tool_errors = 0
 
     # ---- LoopCallbacks implementation ---- #
 
@@ -51,29 +63,43 @@ class RichUI:
         )
 
     def on_tool_call(self, name: str, args: dict[str, Any]) -> None:
+        self._mark_started()
+        self._tool_calls += 1
         self.console.print(
             f"  [bold yellow]→[/bold yellow] [bold]{name}[/bold] [dim]{_compact_args(args)}[/dim]"
         )
 
     def on_tool_result(self, name: str, result: ToolResult) -> None:
+        self._mark_started()
         style = "red" if result.is_error else "green"
         mark = "✗" if result.is_error else "✓"
+        if result.is_error:
+            self._tool_errors += 1
+        else:
+            self._tool_ok += 1
         preview = _truncate(result.output, 400)
         self.console.print(f"  [{style}]{mark} {name}[/{style}] [dim]{preview}[/dim]")
 
     def on_iteration(self, n: int, response: Any) -> None:
+        now = self._ensure_started()
         self._iter = n
         in_tok = response.input_tokens
         out_tok = response.output_tokens
         self.console.print(
             f"\n[bold blue]── iteration {n}[/bold blue] "
-            f"[dim](in {in_tok} / out {out_tok} tokens)[/dim]"
+            f"[dim](in {in_tok} / out {out_tok} tokens · elapsed {self._elapsed(now):.1f}s)[/dim]"
         )
 
     def on_finish(self, result: LoopResult) -> None:
+        now = self._ensure_started()
         status = "[bold green]success[/bold green]" if result.ok else "[bold red]failed[/bold red]"
         self.console.print()
         self.console.rule(f"[bold]{status}[/bold] · {result.iterations} iterations")
+        self.console.print(f"  elapsed: [bold]{self._elapsed(now):.1f}s[/bold]")
+        self.console.print(
+            f"  tools:  [bold]{self._tool_calls}[/bold] calls / "
+            f"[bold]{self._tool_ok}[/bold] ok / [bold]{self._tool_errors}[/bold] error"
+        )
         self.console.print(
             f"  tokens: [bold]{result.total_input_tokens}[/bold] in / "
             f"[bold]{result.total_output_tokens}[/bold] out"
@@ -95,6 +121,21 @@ class RichUI:
             )
         else:
             self.console.print("[dim](no report produced)[/dim]")
+
+    def _ensure_started(self) -> float:
+        now = self._clock()
+        if self._started_at is None:
+            self._started_at = now
+        return now
+
+    def _mark_started(self) -> None:
+        if self._started_at is None:
+            self._started_at = self._clock()
+
+    def _elapsed(self, now: float | None = None) -> float:
+        if self._started_at is None:
+            return 0.0
+        return max(0.0, (self._clock() if now is None else now) - self._started_at)
 
 
 def _truncate(text: str, limit: int) -> str:
