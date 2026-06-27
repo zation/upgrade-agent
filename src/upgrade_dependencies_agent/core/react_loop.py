@@ -148,7 +148,7 @@ class ReActLoop:
             # --- (A) context guard: compact if we're crowding the window ---
             if needs_compaction(messages, self.budget):
                 messages = compact_history(messages, self.budget)
-                tracer.event("context_compacted", tokens_after=None)
+                tracer.event("context_compacted", tokens_after=None, count=1)
 
             # --- (B) ASK the model ---
             try:
@@ -175,6 +175,14 @@ class ReActLoop:
 
             total_in += resp.input_tokens
             total_out += resp.output_tokens
+            tracer.event(
+                "llm_usage",
+                iteration=it,
+                input_tokens=resp.input_tokens,
+                output_tokens=resp.output_tokens,
+                total_input_tokens=total_in,
+                total_output_tokens=total_out,
+            )
             messages.append(resp.assistant)
             tracer.message("assistant", resp.assistant)
             _emit(self.callbacks, "on_iteration", it, resp)
@@ -313,7 +321,13 @@ class ReActLoop:
             total_output_tokens=out_tok,
             error=error,
         )
-        tracer.event("finish", ok=result.ok, iterations=iterations)
+        tracer.event(
+            "finish",
+            ok=result.ok,
+            iterations=iterations,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+        )
         _emit(self.callbacks, "on_finish", result)
         return result
 

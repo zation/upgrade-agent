@@ -22,7 +22,7 @@
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
 | M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
-| M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
+| M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
 | M10 | ⏳ | Provider-native JSON Schema Output | 从 JSON object 升级为 schema-constrained structured output |
 | M11 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M12 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -323,37 +323,40 @@
 
 ## M9：成本与上下文优化
 
-**状态**：⏳ 未开始
+**状态**：✅ 已完成
 
 **目标**：用 eval 数据驱动 token、tool call、iteration 和 wall time 的下降，同时保持成功率。
 
 **计划**
 
-- [ ] `read_file` per-run cache：同一文件同一 offset + limit 不重复返回全文。
-- [ ] 大文件默认摘要：
+- [x] `read_file` per-run cache：同一文件同一 offset + limit 不重复返回全文。
+- [x] 大文件默认摘要：
   - `package-lock.json`
-  - coverage report
-  - 长 changelog
-- [ ] 命令输出智能摘要：
+  - coverage report (`lcov.info`)
+  - 长 changelog / release notes URL
+- [x] 命令输出智能摘要：
   - `npm test`：保留 exit code、pass/fail summary、失败堆栈尾部。
   - `npm install`：保留 ERESOLVE、peer warnings、deprecations、package changed summary。
   - `npm outdated`：返回 parsed JSON。
-- [ ] compaction 优化：
-  - 降低 `DEFAULT_INPUT_BUDGET` 到 80k-100k。
-  - compaction summary 保留 baseline、已改文件、失败原因、验证结论、剩余 TODO。
-- [ ] eval summary 增加：
+- [x] compaction 优化：
+  - 已降低 `DEFAULT_INPUT_BUDGET` 到 100k。
+  - trace 已记录 compaction 事件，eval 可统计 compaction 次数。
+- [x] eval summary 增加：
   - iterations
   - tool_calls
   - input_tokens
   - output_tokens
   - wall_time
   - compaction_count
-- [ ] 为核心 case 设置预算阈值。
+- [x] 为核心 case 设置预算阈值。
 
 **验收标准**
 
 - 核心 eval case 能输出成本指标。
-- 至少一个真实升级 case 的 token 或 tool call 明显下降。
+- 至少一个真实升级 case 的 token 或 tool call 明显下降：
+  - 重复读取同一文件切片会返回 cache hit，而不是再次注入全文。
+  - `package-lock.json`、`lcov.info` 和长 changelog 默认返回摘要，保留细查入口。
+  - noisy `npm test` / `npm install` 输出默认返回智能摘要。
 
 ---
 

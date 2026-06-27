@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,16 @@ class CheckResult:
 
 
 @dataclass(frozen=True)
+class EvalMetrics:
+    iterations: int = 0
+    tool_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    wall_time_seconds: float = 0.0
+    compaction_count: int = 0
+
+
+@dataclass(frozen=True)
 class EvalResult:
     case_name: str
     ok: bool
@@ -48,6 +59,7 @@ class EvalResult:
     command_exit_code: int
     checks: list[CheckResult]
     teardown_exit_codes: list[int]
+    metrics: EvalMetrics
     failure_reason: str | None = None
 
 
@@ -91,6 +103,7 @@ def load_cases(paths: list[Path]) -> list[EvalCase]:
 
 def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
     """Run ``case`` in an isolated target copy and return deterministic results."""
+    start_time = time.perf_counter()
     if not case.target.exists() or not case.target.is_dir():
         raise ValueError(f"Target directory does not exist: {case.target}")
 
@@ -134,6 +147,9 @@ def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
             ),
             *checks,
         ]
+    metrics = _collect_metrics(workdir, wall_time_seconds=time.perf_counter() - start_time)
+    budget_checks = _check_budgets(case.budgets or {}, metrics)
+    checks = [*budget_checks, *checks]
     teardown_results = [
         _run_eval_command(command, workdir, timeout=case.timeout, env=env)
         for command in case.teardown or []
@@ -148,6 +164,8 @@ def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
         if result.returncode != 0
     ]
     checks = [*checks, *teardown_failed_checks]
+    if teardown_results:
+        metrics = _collect_metrics(workdir, wall_time_seconds=time.perf_counter() - start_time)
     command_ok = proc.returncode == 0
     ok = command_ok and all(check.ok for check in checks)
     return EvalResult(
@@ -157,6 +175,7 @@ def run_case(case: EvalCase, workspace: Path | None = None) -> EvalResult:
         command_exit_code=proc.returncode,
         checks=checks,
         teardown_exit_codes=[result.returncode for result in teardown_results],
+        metrics=metrics,
         failure_reason=_classify_failure(proc.returncode, checks),
     )
 
@@ -184,6 +203,14 @@ def result_to_dict(result: EvalResult) -> dict[str, Any]:
         "command_exit_code": result.command_exit_code,
         "teardown_exit_codes": result.teardown_exit_codes,
         "failure_reason": result.failure_reason,
+        "metrics": {
+            "iterations": result.metrics.iterations,
+            "tool_calls": result.metrics.tool_calls,
+            "input_tokens": result.metrics.input_tokens,
+            "output_tokens": result.metrics.output_tokens,
+            "wall_time_seconds": result.metrics.wall_time_seconds,
+            "compaction_count": result.metrics.compaction_count,
+        },
         "checks": [
             {"name": check.name, "ok": check.ok, "message": check.message}
             for check in result.checks
@@ -291,6 +318,76 @@ def _run_check(check: dict[str, Any], workdir: Path, *, env: dict[str, str]) -> 
     if check_type == "structured_report":
         return _check_structured_report(check, workdir)
     return CheckResult(name=str(check_type or "unknown"), ok=False, message="unknown check type")
+
+
+def _collect_metrics(workdir: Path, *, wall_time_seconds: float) -> EvalMetrics:
+    traces_dir = workdir / "traces"
+    if not traces_dir.exists():
+        return EvalMetrics(wall_time_seconds=round(wall_time_seconds, 3))
+
+    input_tokens = 0
+    output_tokens = 0
+    tool_calls = 0
+    turn_iterations: set[int] = set()
+    turn_count = 0
+    compaction_count = 0
+    for trace_path in sorted(traces_dir.glob("*.jsonl")):
+        try:
+            events = _read_trace_events(trace_path)
+        except ValueError:
+            continue
+        for event in events:
+            event_type = event.get("type")
+            data = event.get("data", {})
+            if event_type == "llm_usage":
+                input_tokens += int(data.get("input_tokens") or 0)
+                output_tokens += int(data.get("output_tokens") or 0)
+            elif _is_tool_call(event):
+                tool_calls += 1
+            elif event_type == "turn_end":
+                turn_count += 1
+                iteration = data.get("iteration")
+                if isinstance(iteration, int):
+                    turn_iterations.add(iteration)
+            elif event_type == "context_compacted":
+                compaction_count += 1
+
+    iterations = max(turn_iterations) if turn_iterations else turn_count
+    return EvalMetrics(
+        iterations=iterations,
+        tool_calls=tool_calls,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        wall_time_seconds=round(wall_time_seconds, 3),
+        compaction_count=compaction_count,
+    )
+
+
+def _check_budgets(budgets: dict[str, int], metrics: EvalMetrics) -> list[CheckResult]:
+    metric_by_budget = {
+        "max_iterations": ("iterations", metrics.iterations),
+        "max_tool_calls": ("tool_calls", metrics.tool_calls),
+        "max_input_tokens": ("input_tokens", metrics.input_tokens),
+        "max_output_tokens": ("output_tokens", metrics.output_tokens),
+        "max_wall_time_seconds": ("wall_time_seconds", metrics.wall_time_seconds),
+        "max_compaction_count": ("compaction_count", metrics.compaction_count),
+    }
+    results: list[CheckResult] = []
+    for budget_name, (metric_name, actual) in metric_by_budget.items():
+        if budget_name not in budgets:
+            continue
+        limit = budgets[budget_name]
+        ok = actual <= limit
+        results.append(
+            CheckResult(
+                name=f"budget:{metric_name}",
+                ok=ok,
+                message=f"{metric_name}={actual}; budget {actual} <= {limit}"
+                if ok
+                else f"{metric_name} budget exceeded: {actual} > {limit}",
+            )
+        )
+    return results
 
 
 def _check_package_json_version(check: dict[str, Any], workdir: Path) -> CheckResult:
@@ -658,6 +755,8 @@ def _classify_failure(exit_code: int, checks: list[CheckResult]) -> str | None:
         return "wrong_diff"
     if name.startswith("structured_report:"):
         return "structured_report_failed"
+    if name.startswith("budget:"):
+        return "budget_exceeded"
     if name.startswith("command:"):
         return "test_failed"
     if name == "case_setup":

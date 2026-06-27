@@ -223,10 +223,47 @@ class FetchUrl(ToolImpl):
                 is_error=True,
             )
 
-        if len(text) > _MAX_BYTES:
+        if _looks_like_long_changelog(url, text):
+            text = _summarize_long_changelog(text)
+        elif len(text) > _MAX_BYTES:
             text = text[:_MAX_BYTES] + "\n\n... (truncated)"
 
         return ToolResult(
             output=text or "(empty response)",
             metadata={"url": url, "content_type": content_type, "bytes": len(r.content)},
         )
+
+
+def _looks_like_long_changelog(url: str, text: str) -> bool:
+    lower_url = url.lower()
+    if not any(marker in lower_url for marker in ("changelog", "release", "migration")):
+        return False
+    heading_count = len(re.findall(r"(?m)^#{1,3}\s+", text))
+    return len(text) > 1500 or heading_count > 30
+
+
+def _summarize_long_changelog(text: str) -> str:
+    lines = text.splitlines()
+    headings = [line for line in lines if re.match(r"^#{1,3}\s+", line)]
+    important = [
+        line
+        for line in lines
+        if re.search(
+            r"\b(breaking|removed|deprecated|migration|esm|commonjs|cjs|node|peer)\b",
+            line,
+            re.IGNORECASE,
+        )
+    ]
+    recent_headings = "\n".join(headings[:30])
+    important_lines = "\n".join(important[:40])
+    tail = "\n".join(lines[-80:])[-1800:]
+    return (
+        "long changelog summary\n"
+        "Recent headings:\n"
+        f"{recent_headings or '(none found)'}\n\n"
+        "Important lines:\n"
+        f"{important_lines or '(none found)'}\n\n"
+        "Tail:\n"
+        f"{tail}\n"
+        "Fetch a more specific URL or release tag if a focused section is needed."
+    )

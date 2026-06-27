@@ -16,6 +16,7 @@ Design notes:
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -65,9 +66,44 @@ class ReadFile(ToolImpl):
         if full.is_dir():
             return ToolResult(output=f"Path is a directory, not a file: {path}", is_error=True)
         try:
+            stat = full.stat()
+        except OSError as e:
+            return ToolResult(output=f"Failed to stat {path}: {e}", is_error=True)
+        read_cache = ctx.scratch.setdefault("read_file_cache", {})
+        cache_key = (str(full), int(offset), int(limit), stat.st_mtime_ns, stat.st_size)
+        if cache_key in read_cache:
+            cached = read_cache[cache_key]
+            return ToolResult(
+                output=(
+                    f"Read cache hit for {path} lines {cached['start']}-{cached['end']}. "
+                    "This exact slice was already returned earlier in this run; use a "
+                    "different offset or limit if you need other content."
+                ),
+                metadata={
+                    "path": str(full),
+                    "total_lines": cached["total_lines"],
+                    "shown": 0,
+                    "cache_hit": True,
+                },
+            )
+        try:
             text = full.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             return ToolResult(output=f"Failed to read {path}: {e}", is_error=True)
+
+        if _should_summarize_large_file(path, args):
+            summary = _summarize_large_file(path, text)
+            if summary is not None:
+                read_cache[cache_key] = {"start": 1, "end": 0, "total_lines": text.count("\n") + 1}
+                return ToolResult(
+                    output=summary,
+                    metadata={
+                        "path": str(full),
+                        "total_lines": text.count("\n") + 1,
+                        "shown": 0,
+                        "summarized": True,
+                    },
+                )
 
         lines = text.splitlines()
         start = max(1, offset) - 1
@@ -80,7 +116,89 @@ class ReadFile(ToolImpl):
         if end < len(lines):
             note = f"\n\n({len(lines) - end} more lines; pass a larger offset to continue)"
         meta = {"path": str(full), "total_lines": len(lines), "shown": end - start}
+        read_cache[cache_key] = {
+            "start": start + 1,
+            "end": end,
+            "total_lines": len(lines),
+        }
         return ToolResult(output=f"{body}{note}", metadata=meta)
+
+
+def _should_summarize_large_file(path: str, args: dict[str, Any]) -> bool:
+    if "offset" in args or "limit" in args:
+        return False
+    return Path(path).name in {"package-lock.json", "lcov.info"}
+
+
+def _summarize_large_file(path: str, text: str) -> str | None:
+    if Path(path).name != "package-lock.json":
+        if Path(path).name == "lcov.info":
+            return _summarize_lcov(text)
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    packages = data.get("packages")
+    dependencies = data.get("dependencies")
+    package_count = len(packages) if isinstance(packages, dict) else 0
+    dependency_count = len(dependencies) if isinstance(dependencies, dict) else 0
+    root_deps: dict[str, Any] = {}
+    if isinstance(packages, dict) and isinstance(packages.get(""), dict):
+        root = packages[""]
+        for section in ("dependencies", "devDependencies", "peerDependencies"):
+            values = root.get(section)
+            if isinstance(values, dict):
+                root_deps.update(values)
+    root_names = ", ".join(sorted(root_deps)[:20]) or "(none found)"
+    return (
+        "package-lock.json summary\n"
+        f"- name: {data.get('name', '(unknown)')}\n"
+        f"- lockfileVersion: {data.get('lockfileVersion', '(unknown)')}\n"
+        f"- packages: {package_count}\n"
+        f"- top-level dependencies: {len(root_deps) or dependency_count}\n"
+        f"- top-level names: {root_names}\n"
+        "Use read_file with explicit offset and limit to inspect raw lockfile lines."
+    )
+
+
+def _summarize_lcov(text: str) -> str:
+    files: list[tuple[str, int, int]] = []
+    current_file: str | None = None
+    current_found = 0
+    current_hit = 0
+    for line in text.splitlines():
+        if line.startswith("SF:"):
+            current_file = line[3:]
+            current_found = 0
+            current_hit = 0
+        elif line.startswith("LF:"):
+            current_found = _int_or_zero(line[3:])
+        elif line.startswith("LH:"):
+            current_hit = _int_or_zero(line[3:])
+        elif line == "end_of_record" and current_file is not None:
+            files.append((current_file, current_hit, current_found))
+            current_file = None
+    total_hit = sum(hit for _, hit, _ in files)
+    total_found = sum(found for _, _, found in files)
+    weakest = sorted(files, key=lambda item: (item[1] / item[2]) if item[2] else 1)[:10]
+    weak_lines = "\n".join(f"- {name}: {hit}/{found}" for name, hit, found in weakest)
+    percent = (total_hit / total_found * 100) if total_found else 0.0
+    return (
+        "lcov.info summary\n"
+        f"- files: {len(files)}\n"
+        f"- line coverage: {total_hit}/{total_found} ({percent:.1f}%)\n"
+        "Lowest covered files:\n"
+        f"{weak_lines or '- (none)'}\n"
+        "Use read_file with explicit offset and limit to inspect raw coverage lines."
+    )
+
+
+def _int_or_zero(value: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        return 0
 
 
 class WriteFile(ToolImpl):

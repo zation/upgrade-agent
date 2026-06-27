@@ -99,9 +99,19 @@ class Tracer:
             1 for e in self._events if e.type == "tool_call" and e.data.get("phase") != "result"
         )
         turns = sum(1 for e in self._events if e.type == "turn_end")
+        input_tokens = sum(
+            int(e.data.get("input_tokens") or 0) for e in self._events if e.type == "llm_usage"
+        )
+        output_tokens = sum(
+            int(e.data.get("output_tokens") or 0) for e in self._events if e.type == "llm_usage"
+        )
+        compaction_count = sum(1 for e in self._events if e.type == "context_compacted")
         return {
             "run_id": self.run_id,
             "events": len(self._events),
             "tool_calls": tool_calls,
             "turns": turns,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "compaction_count": compaction_count,
         }

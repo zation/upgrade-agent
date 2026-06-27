@@ -9,6 +9,7 @@ the context budget.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from typing import Any
 
@@ -64,6 +65,11 @@ class RunCommand(ToolImpl):
             return ToolResult(output=f"Failed to spawn command: {e}", is_error=True)
 
         out = (proc.stdout or "") + (proc.stderr or "")
+        summarized = False
+        smart_summary = _smart_command_summary(command, out)
+        if smart_summary is not None:
+            out = smart_summary
+            summarized = True
         truncated = False
         if len(out) > _MAX_OUTPUT_CHARS:
             # Keep head + tail so both startup context and the final error are visible.
@@ -78,5 +84,62 @@ class RunCommand(ToolImpl):
         # needs to read failing test output as normal content to reason about it.
         return ToolResult(
             output=body + note,
-            metadata={"exit_code": proc.returncode, "truncated": truncated},
+            metadata={
+                "exit_code": proc.returncode,
+                "truncated": truncated,
+                "summarized": summarized,
+            },
         )
+
+
+def _smart_command_summary(command: str, output: str) -> str | None:
+    normalized = command.strip().lower()
+    if _looks_like_npm_test(normalized) and len(output) > 2000:
+        return _summarize_npm_test(output)
+    if _looks_like_npm_install(normalized) and len(output) > 2000:
+        return _summarize_npm_install(output)
+    return None
+
+
+def _looks_like_npm_test(command: str) -> bool:
+    return command in {"npm test", "npm run test"} or command.startswith(
+        ("npm test ", "npm run test ")
+    )
+
+
+def _looks_like_npm_install(command: str) -> bool:
+    return command in {"npm install", "npm i"} or command.startswith(("npm install ", "npm i "))
+
+
+def _summarize_npm_test(output: str) -> str:
+    lines = output.splitlines()
+    summary_lines = [
+        line
+        for line in lines
+        if re.search(r"\b(passing|failing|failed|failures?|tests?)\b", line, re.IGNORECASE)
+    ]
+    tail = "\n".join(lines[-80:])
+    parts = ["[smart summary: npm test]"]
+    if summary_lines:
+        parts.append("summary lines:\n" + "\n".join(summary_lines[-20:]))
+    parts.append("tail:\n" + tail[-1800:])
+    return "\n\n".join(parts)
+
+
+def _summarize_npm_install(output: str) -> str:
+    lines = output.splitlines()
+    important = [
+        line
+        for line in lines
+        if re.search(
+            r"\b(eresolve|peer|deprecated|warn|error|added|removed|changed|audited)\b",
+            line,
+            re.IGNORECASE,
+        )
+    ]
+    tail = "\n".join(lines[-60:])
+    parts = ["[smart summary: npm install]"]
+    if important:
+        parts.append("important lines:\n" + "\n".join(important[-40:]))
+    parts.append("tail:\n" + tail[-1600:])
+    return "\n\n".join(parts)

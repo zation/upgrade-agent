@@ -26,8 +26,9 @@ __all__ = ["ContextBudget", "compact_history", "estimate_tokens"]
 # is safe (we compact earlier than strictly necessary); under-estimating is not.
 _CHARS_PER_TOKEN = 4.0
 
-# Default budget leaves headroom under Claude's 200k window for the response.
-DEFAULT_INPUT_BUDGET = 150_000  # tokens
+# Default budget leaves headroom under 128k-200k provider windows for responses
+# and reduces how long expensive tool output remains verbatim.
+DEFAULT_INPUT_BUDGET = 100_000  # tokens
 
 # Never compact below this many turns of recent history — we always keep the
 # "working memory" the model is actively reasoning about intact.
@@ -87,8 +88,10 @@ def compact_history(
     dropped = len(messages) - 1 - budget.keep_turns
     stub_text = summary or (
         f"[context compaction] {dropped} earlier message(s) omitted to fit the "
-        "context window. They contained tool exploration whose conclusions are "
-        "summarized above; re-investigate only if a specific detail is needed."
+        "context window. Preserve these working-memory anchors from the remaining "
+        "recent turns and trace before acting: baseline status, changed files, "
+        "failure reason, verification conclusion, and remaining TODO. Re-investigate "
+        "only when a specific omitted detail is needed."
     )
     stub = Message(role="user", content=[TextBlock(text=stub_text)])
     return [head, stub, *tail]

@@ -50,6 +50,78 @@ def test_read_file(ctx):
     assert res.metadata["total_lines"] == 1
 
 
+def test_read_file_cache_avoids_repeating_same_slice(ctx):
+    from upgrade_dependencies_agent.tools.fs import ReadFile
+
+    tool = ReadFile()
+    first = tool.run({"path": "src/a.js"}, ctx)
+    second = tool.run({"path": "src/a.js"}, ctx)
+
+    assert not first.is_error
+    assert not second.is_error
+    assert "require('chai')" in first.output
+    assert "require('chai')" not in second.output
+    assert second.metadata["cache_hit"] is True
+
+
+def test_read_file_summarizes_package_lock_by_default(ctx):
+    from upgrade_dependencies_agent.tools.fs import ReadFile
+
+    lock = {
+        "name": "fixture",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"dependencies": {"left-pad": "^1.3.0"}},
+            "node_modules/left-pad": {"version": "1.3.0"},
+            "node_modules/mocha": {"version": "11.0.0"},
+        },
+    }
+    from pathlib import Path
+
+    Path(ctx.workdir, "package-lock.json").write_text(json.dumps(lock), encoding="utf-8")
+
+    res = ReadFile().run({"path": "package-lock.json"}, ctx)
+
+    assert not res.is_error
+    assert "package-lock.json summary" in res.output
+    assert "lockfileVersion: 3" in res.output
+    assert "packages: 3" in res.output
+    assert "node_modules/left-pad" not in res.output
+
+
+def test_read_file_summarizes_lcov_by_default(ctx):
+    from pathlib import Path
+
+    from upgrade_dependencies_agent.tools.fs import ReadFile
+
+    coverage = "\n".join(
+        [
+            "TN:",
+            "SF:src/a.js",
+            "DA:1,1",
+            "DA:2,0",
+            "LF:2",
+            "LH:1",
+            "end_of_record",
+            "SF:src/b.js",
+            "DA:1,1",
+            "LF:1",
+            "LH:1",
+            "end_of_record",
+        ]
+    )
+    Path(ctx.workdir, "coverage").mkdir()
+    Path(ctx.workdir, "coverage/lcov.info").write_text(coverage, encoding="utf-8")
+
+    res = ReadFile().run({"path": "coverage/lcov.info"}, ctx)
+
+    assert not res.is_error
+    assert "lcov.info summary" in res.output
+    assert "files: 2" in res.output
+    assert "line coverage: 2/3" in res.output
+    assert "src/a.js: 1/2" in res.output
+
+
 def test_read_file_missing(ctx):
     from upgrade_dependencies_agent.tools.fs import ReadFile
 
@@ -106,6 +178,56 @@ def test_glob_matches(ctx):
 
     res = Glob().run({"pattern": "**/*.js"}, ctx)
     assert "src/a.js" in res.output
+
+
+def test_run_command_summarizes_noisy_npm_test_output(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.shell import RunCommand
+
+    class FakeProcess:
+        returncode = 1
+        stdout = "noise\n" * 3000 + "  28 passing\n  1 failing\n"
+        stderr = "AssertionError: expected true\n" + "stack tail\n" * 50
+
+    def fake_run(*args, **kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.shell.subprocess.run", fake_run)
+
+    res = RunCommand().run({"command": "npm test"}, ctx)
+
+    assert not res.is_error
+    assert "[exit 1]" in res.output
+    assert "28 passing" in res.output
+    assert "1 failing" in res.output
+    assert "AssertionError" in res.output
+    assert len(res.output) < 2500
+
+
+def test_fetch_url_summarizes_long_changelog(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.changelog import FetchUrl
+
+    class FakeResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.headers = {"content-type": "text/markdown"}
+            self.content = b"x"
+            self.text = (
+                "# Changelog\n\n"
+                + "\n".join(f"## {i}.0.0\nRegular notes" for i in range(80))
+                + "\n## 5.0.0\nBreaking: removed CommonJS support\n"
+            )
+
+    def fake_get(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.changelog.httpx.get", fake_get)
+
+    res = FetchUrl().run({"url": "https://example.test/CHANGELOG.md"}, ctx)
+
+    assert not res.is_error
+    assert "long changelog summary" in res.output
+    assert "Breaking: removed CommonJS support" in res.output
+    assert len(res.output) < 4000
 
 
 # --- dependency research --- #

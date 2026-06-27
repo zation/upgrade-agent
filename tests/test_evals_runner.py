@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from evals.runner import load_case, main, run_case, run_cases
+from evals.runner import load_case, main, result_to_dict, run_case, run_cases
 
 
 def _write_package(path: Path, mocha: str = "^4.0.0") -> None:
@@ -66,6 +66,93 @@ def test_run_case_copies_target_and_checks_success(tmp_path: Path) -> None:
     assert result.workdir != target
     assert [check.ok for check in result.checks] == [True, True, True]
     assert json.loads((target / "package.json").read_text())["devDependencies"]["mocha"] == "^4.0.0"
+
+
+def test_run_case_reports_cost_metrics_from_trace_and_wall_time(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+    trace = "\n".join(
+        json.dumps(event)
+        for event in [
+            {"type": "llm_usage", "data": {"input_tokens": 120, "output_tokens": 30}},
+            {"type": "tool_call", "data": {"name": "read_file", "input": {}}},
+            {
+                "type": "tool_call",
+                "data": {"name": "read_file", "phase": "result", "is_error": False},
+            },
+            {"type": "context_compacted", "data": {}},
+            {"type": "turn_end", "data": {"iteration": 1}},
+        ]
+    )
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "cost metrics",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('traces').mkdir(); "
+                        f"Path('traces/run.jsonl').write_text({trace!r})"
+                    ),
+                ],
+                "checks": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert result.ok
+    assert result.metrics.iterations == 1
+    assert result.metrics.tool_calls == 1
+    assert result.metrics.input_tokens == 120
+    assert result.metrics.output_tokens == 30
+    assert result.metrics.compaction_count == 1
+    assert result.metrics.wall_time_seconds >= 0
+    assert result_to_dict(result)["metrics"]["input_tokens"] == 120
+
+
+def test_run_case_fails_when_cost_budget_is_exceeded(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    _write_package(target / "package.json")
+    trace = json.dumps({"type": "llm_usage", "data": {"input_tokens": 120, "output_tokens": 30}})
+
+    case_path = tmp_path / "case.json"
+    case_path.write_text(
+        json.dumps(
+            {
+                "name": "cost budget",
+                "target": str(target),
+                "command": [
+                    "python",
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "Path('traces').mkdir(); "
+                        f"Path('traces/run.jsonl').write_text({trace!r})"
+                    ),
+                ],
+                "budgets": {"max_input_tokens": 100},
+                "checks": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_case(load_case(case_path), workspace=tmp_path / "work")
+
+    assert not result.ok
+    assert result.failure_reason == "budget_exceeded"
+    assert result.checks[0].name == "budget:input_tokens"
+    assert "120 > 100" in result.checks[0].message
 
 
 def test_run_case_reports_failing_check(tmp_path: Path) -> None:

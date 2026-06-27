@@ -124,6 +124,7 @@ class ToolContext(BaseModel):
 
     workdir: str
     run_id: str
+    scratch: dict[str, Any] = Field(default_factory=dict)
 
 
 @runtime_checkable

@@ -16,7 +16,11 @@
   "teardown": [],
   "budgets": {
     "max_iterations": 80,
-    "max_input_tokens": 2000000
+    "max_tool_calls": 280,
+    "max_input_tokens": 2000000,
+    "max_output_tokens": 500000,
+    "max_wall_time_seconds": 3600,
+    "max_compaction_count": 8
   },
   "checks": [
     {

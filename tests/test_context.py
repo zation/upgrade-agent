@@ -29,6 +29,12 @@ def test_compaction_inserts_summary_and_keeps_tail() -> None:
     assert len(out) == 1 + 1 + 4
     # tail preserved verbatim
     assert out[-1] is msgs[-1]
+    stub = out[1].text()
+    assert "baseline" in stub
+    assert "changed files" in stub
+    assert "failure reason" in stub
+    assert "verification" in stub
+    assert "remaining TODO" in stub
 
 
 def test_needs_compaction_threshold() -> None:
