@@ -173,8 +173,8 @@ If that error is gone but a new one appears, repeat step 12. If the SAME \
 error persists, your fix was wrong — try a different approach.
 
 14. **Repeat steps 11-13** until all tests pass. If you reach 5 fix attempts \
-without getting to green, STOP and revert all changes (use git checkout on \
-each modified file or git reset --hard if there are no other changes to keep).""",
+without getting to green, STOP and revert only your changed files with \
+revert_files. Never use broad git reset/checkout/restore commands.""",
         ),
         PromptSection(
             "Phase 5: Verify and report",
@@ -243,7 +243,8 @@ only when needed and keep the change minimal.
    - If tests pass with the same count or better, keep the package and continue.
    - If tests fail, diagnose and fix the smallest applicable breaking change.
    - If you cannot fix that package after 5 honest attempts, revert ONLY that \
-package's changes and continue with the remaining queue. Clearly report it.
+package's changes with revert_files and continue with the remaining queue. \
+Clearly report it.
 7. Use dependency_research before risky major jumps, then npm_view, \
 npm_releases, fetch_releases, and fetch_url only when a package upgrade causes \
 a failure or when the major-version span looks risky. Do not spend the whole \

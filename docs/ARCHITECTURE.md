@@ -133,13 +133,13 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 - heal 次数受 `max_heal_attempts` 限制。
 - mutation stage 会把当前 dependency 和允许修改文件传入 runtime config。
 - runtime guardrail 会拒绝超出 `allowed_files` 的显式文件写入或编辑。
-- runtime guardrail 会拒绝危险全局 revert 命令。
+- runtime guardrail 会拒绝危险全局 revert 命令，并提供结构化 `revert_files` 恢复路径。
 - CLI stage runner 会在第一次 mutation stage 前检查 target worktree，已有改动时停止。
 - workflow report node 会采集目标 git worktree 的实际 changed files，并写入 graph state / `AgentReport`。
 - `--report-json` 输出上述结构化 `AgentReport`。
 - 单元测试覆盖通过、失败后修复、超过修复预算、CLI 接入等路径。
 
-后续要把 verify 的自然语言 verdict 判断替换为 structured output，见 Roadmap M8。
+verify 节点优先解析结构化 JSON；非 JSON verification 输出按失败处理。
 
 ## Research 能力
 
@@ -191,7 +191,7 @@ provider 差异被限制在这一层，尤其是 tool result 映射：
 
 - **M1-M6 ✅**：core、单依赖升级、批量/graph v1、研究工具 v1、eval v1、补测试 v1。
 - **M7 ✅**：Prompt / Skill 质量 v1。
-- **M8 🚧**：LangGraph backbone、结构化状态与 runtime guardrails。
+- **M8 ✅**：LangGraph backbone、结构化状态与 runtime guardrails。
 - **M9 ⏳**：成本与上下文优化。
 - **M10 ⏳**：Research / RAG 深化。
 - **M11 ⏳**：CLI / UX 与集成体验。

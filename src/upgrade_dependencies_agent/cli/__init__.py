@@ -311,6 +311,7 @@ def _make_stage_loop_runner(
                 enforce_baseline_guardrail=request.enforce_baseline_guardrail,
                 current_dependency=request.current_dependency,
                 allowed_files=request.allowed_files,
+                response_format=request.response_format,
             ),
             tools=read_only_tools() if request.read_only else default_tools(),
             workdir=workdir,

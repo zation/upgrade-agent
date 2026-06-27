@@ -186,6 +186,8 @@ class AgentConfig(BaseModel):
     # Runtime metadata supplied by graph stages; guardrails can use this to scope mutations.
     current_dependency: str | None = None
     allowed_files: tuple[str, ...] = ()
+    # Optional provider-native structured output hint, used by providers that support it.
+    response_format: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------------- #

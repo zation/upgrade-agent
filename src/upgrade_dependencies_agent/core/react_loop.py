@@ -157,6 +157,7 @@ class ReActLoop:
                     messages=messages,
                     tools=tool_defs,
                     config=self.config,
+                    response_format=self.config.response_format,
                 )
             except Exception as e:
                 log.exception("LLM call failed")

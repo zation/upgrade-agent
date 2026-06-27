@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from .types import ToolResult, ToolUseBlock
 
 MUTATING_FS_TOOLS = {"write_file", "edit_file"}
+SCOPED_PATH_TOOLS = {*MUTATING_FS_TOOLS, "revert_files"}
 
 
 @dataclass
@@ -40,24 +41,25 @@ def mutation_scope_guardrail(
     allowed_files: tuple[str, ...],
 ) -> ToolResult | None:
     """Return a blocking result when a file mutation targets a disallowed path."""
-    if not allowed_files or call.name not in MUTATING_FS_TOOLS:
+    if not allowed_files or call.name not in SCOPED_PATH_TOOLS:
         return None
 
-    requested = _normalize_relative_path(str(call.input.get("path", "")))
+    requested_paths = _requested_mutation_paths(call)
     allowed = {_normalize_relative_path(path) for path in allowed_files}
-    if requested in allowed:
+    outside_scope = sorted(path for path in requested_paths if path not in allowed)
+    if not outside_scope:
         return None
 
     return ToolResult(
         output=(
             "Tool call blocked by runtime guardrail: file mutation target "
-            f"'{requested}' is outside the allowed mutation scope. Allowed files: "
+            f"'{', '.join(outside_scope)}' is outside the allowed mutation scope. Allowed files: "
             f"{', '.join(sorted(allowed))}."
         ),
         is_error=True,
         metadata={
             "guardrail": "allowed_files_scope",
-            "requested_path": requested,
+            "requested_paths": requested_paths,
             "allowed_files": sorted(allowed),
         },
     )
@@ -102,6 +104,17 @@ def _is_package_manager_mutation(call: ToolUseBlock) -> bool:
         or re.search(r"\bpnpm\s+(add|install|i|update|remove|rm)\b", normalized)
         or re.search(r"\byarn\s+(add|install|upgrade|remove)\b", normalized)
     )
+
+
+def _requested_mutation_paths(call: ToolUseBlock) -> list[str]:
+    if call.name in MUTATING_FS_TOOLS:
+        return [_normalize_relative_path(str(call.input.get("path", "")))]
+    if call.name == "revert_files":
+        paths = call.input.get("paths", [])
+        if not isinstance(paths, list):
+            return [""]
+        return [_normalize_relative_path(str(path)) for path in paths]
+    return []
 
 
 def _looks_like_test_command(command: str) -> bool:

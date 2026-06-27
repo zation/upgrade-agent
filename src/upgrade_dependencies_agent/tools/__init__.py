@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..core.types import Tool
 from .changelog import FetchReleases, FetchUrl
 from .fs import EditFile, Glob, Grep, ReadFile, WriteFile
-from .git import GitDiff, GitStatus
+from .git import GitDiff, GitStatus, RevertFiles
 from .npm import DependencyResearch, NpmOutdated, NpmReleases, NpmView
 from .shell import RunCommand
 
@@ -28,6 +28,7 @@ __all__ = [
     "NpmReleases",
     "NpmView",
     "ReadFile",
+    "RevertFiles",
     "RunCommand",
     "WriteFile",
     "default_tools",
@@ -65,6 +66,7 @@ def default_tools() -> list[Tool]:
         WriteFile(),
         EditFile(),
         RunCommand(),
+        RevertFiles(),
         GitStatus(),
         GitDiff(),
         NpmOutdated(),

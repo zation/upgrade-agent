@@ -23,8 +23,10 @@ class FakeClient:
     def __init__(self, responses: list[LLMResponse]) -> None:
         self.responses = responses
         self.calls = 0
+        self.ask_kwargs: list[dict[str, object]] = []
 
     def ask(self, **kwargs) -> LLMResponse:
+        self.ask_kwargs.append(kwargs)
         response = self.responses[self.calls]
         self.calls += 1
         return response
@@ -211,6 +213,35 @@ def test_allowed_files_guardrail_blocks_file_mutation_outside_scope(
     assert "outside the allowed mutation scope" in _last_tool_result_content(result)
 
 
+def test_allowed_files_guardrail_blocks_revert_outside_scope(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("revert_files", {"paths": ["src.js"]}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            system_prompt="",
+            max_iterations=3,
+            enforce_baseline_guardrail=True,
+            allowed_files=("package.json", "package-lock.json"),
+        ),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then revert outside scope")
+
+    assert result.ok
+    assert "outside the allowed mutation scope" in _last_tool_result_content(result)
+
+
 def test_allowed_files_guardrail_allows_file_mutation_inside_scope(
     tmp_path: Path,
 ) -> None:
@@ -286,3 +317,22 @@ def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
 
     assert result.ok
     assert "$ git diff --name-only" in _last_tool_result_content(result)
+
+
+def test_react_loop_passes_response_format_to_client(tmp_path: Path) -> None:
+    client = FakeClient([_done_response()])
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            system_prompt="",
+            max_iterations=1,
+            response_format={"type": "json_object"},
+        ),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("return json")
+
+    assert result.ok
+    assert client.ask_kwargs[0]["response_format"] == {"type": "json_object"}

@@ -36,10 +36,12 @@ class StageLoopRequest:
     enforce_baseline_guardrail: bool = False
     current_dependency: str | None = None
     allowed_files: tuple[str, ...] = ()
+    response_format: dict[str, object] | None = None
 
 
 StageLoopRunner = Callable[[StageLoopRequest], LoopResult]
 ChangedFilesCollector = Callable[[], list[str] | None]
+JSON_OBJECT_RESPONSE_FORMAT = {"type": "json_object"}
 
 
 def run_upgrade_backbone_workflow(
@@ -57,6 +59,7 @@ def run_upgrade_backbone_workflow(
                 stage="baseline",
                 system_prompt=BASE_AGENT,
                 task=_baseline_task(target),
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         return {
@@ -71,6 +74,7 @@ def run_upgrade_backbone_workflow(
                 system_prompt=BREAKING_CHANGE_RESEARCHER,
                 task=_research_task(target),
                 read_only=True,
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         return {
@@ -105,6 +109,7 @@ def run_upgrade_backbone_workflow(
                 stage="verify",
                 system_prompt=BASE_AGENT,
                 task=_verify_task(state),
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         return {
@@ -165,6 +170,7 @@ def run_upgrade_all_backbone_workflow(
                 stage="baseline",
                 system_prompt=BASE_AGENT,
                 task=_batch_baseline_task(),
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         return {
@@ -179,6 +185,7 @@ def run_upgrade_all_backbone_workflow(
                 system_prompt=BASE_AGENT,
                 task=_batch_queue_task(),
                 read_only=True,
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         return {
@@ -267,6 +274,7 @@ def run_upgrade_all_backbone_workflow(
                 stage="verify_package",
                 system_prompt=BASE_AGENT,
                 task=_batch_verify_package_task(item, execute_result),
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         package_verification = _verification_from_result(verify_result)
@@ -303,6 +311,7 @@ def run_upgrade_all_backbone_workflow(
                 stage="verify",
                 system_prompt=BASE_AGENT,
                 task=_batch_verify_task(state),
+                response_format=JSON_OBJECT_RESPONSE_FORMAT,
             )
         )
         verification = _verification_from_result(result)
@@ -715,7 +724,7 @@ def _verification_from_result(result: LoopResult) -> VerificationResult:
         return parse_structured_text(result.final_text, VerificationResult)
     except StructuredParseError:
         return VerificationResult(
-            ok=_result_passed(result),
+            ok=False,
             command="npm test",
             summary=result.final_text,
         )

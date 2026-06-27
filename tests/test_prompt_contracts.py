@@ -37,6 +37,13 @@ def test_upgrade_all_prompt_keeps_one_dependency_contract() -> None:
     assert ONE_DEPENDENCY_RULE in UPGRADE_ALL
 
 
+def test_upgrade_prompts_use_structured_revert_tool() -> None:
+    assert "revert_files" in UPGRADE
+    assert "revert_files" in UPGRADE_ALL
+    assert "git reset --hard" not in UPGRADE
+    assert "git reset --hard" not in UPGRADE_ALL
+
+
 def test_research_prompt_keeps_read_only_source_and_verdict_contracts() -> None:
     assert READ_ONLY_RULE in BREAKING_CHANGE_RESEARCHER
     assert SOURCE_EVIDENCE_RULE in BREAKING_CHANGE_RESEARCHER

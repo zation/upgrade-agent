@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 
 import pytest
 
@@ -149,3 +150,66 @@ def test_dependency_research_summarizes_registry_metadata(monkeypatch, ctx):
     assert "https://github.com/chaijs/chai/releases" in data["candidate_sources"]
     assert any("Major-version upgrade" in hint for hint in data["risk_hints"])
     assert "dependency_research" in {tool.name for tool in read_only_tools()}
+
+
+# --- structured revert --- #
+
+
+def test_revert_files_restores_only_requested_tracked_files(tmp_path):
+    from upgrade_dependencies_agent.tools.git import RevertFiles
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "package.json").write_text('{"name":"old"}\n', encoding="utf-8")
+    (tmp_path / "src.js").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "package.json", "src.js"], cwd=tmp_path, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "files",
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "package.json").write_text('{"name":"new"}\n', encoding="utf-8")
+    (tmp_path / "src.js").write_text("new\n", encoding="utf-8")
+
+    result = RevertFiles().run(
+        {"paths": ["package.json"]},
+        ToolContext(workdir=str(tmp_path), run_id="test"),
+    )
+
+    assert not result.is_error
+    assert (tmp_path / "package.json").read_text(encoding="utf-8") == '{"name":"old"}\n'
+    assert (tmp_path / "src.js").read_text(encoding="utf-8") == "new\n"
+
+
+def test_revert_files_rejects_path_escape(ctx):
+    from upgrade_dependencies_agent.tools.git import RevertFiles
+
+    result = RevertFiles().run({"paths": ["../outside.js"]}, ctx)
+
+    assert result.is_error
+    assert "outside the project workdir" in result.output

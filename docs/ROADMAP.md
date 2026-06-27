@@ -21,7 +21,7 @@
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
 | M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
-| M8 | 🚧 | LangGraph Backbone、结构化状态与运行时 Guardrails | `upgrade` / `upgrade-all` 已迁移到 backbone，baseline guardrail v1 已落地 |
+| M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
 | M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
@@ -246,7 +246,7 @@
 
 ## M8：LangGraph Backbone、结构化状态与运行时 Guardrails
 
-**状态**：🚧 进行中
+**状态**：✅ 已完成
 
 **目标**：把关键流程从“靠 prompt 遵守”升级为“程序化状态 + 可验证约束”。
 
@@ -270,10 +270,10 @@
   - 已删除 `upgrade-graph` 兼容 alias，避免重复入口。
   - baseline / research / plan / execute / verify / heal / report 已作为 graph stage 串联。
 - [x] LangGraph structured artifacts v1：
-  - verify 节点优先解析 JSON `VerificationResult`，并保留 legacy verdict fallback。
+  - verify 节点优先解析 JSON `VerificationResult`，解析失败时 fail-closed。
   - `upgrade-all` queue 节点优先解析 JSON `UpgradeQueue`。
   - `upgrade-all` 已基于结构化 package queue 显式执行 `select_package` → `execute_package` → `verify_package` 条件边，并回写 package 状态。
-- [ ] LangGraph structured artifacts 后续：
+- [x] LangGraph structured artifacts 后续：
   - [x] baseline 阶段优先解析 JSON `BaselineState`，保留 legacy verdict fallback。
   - [x] research 阶段优先解析 JSON `ResearchBrief`，保留 legacy text fallback。
   - [x] plan 阶段稳定产出 `UpgradePlan`，并优先使用 structured research 的目标版本。
@@ -287,13 +287,13 @@
   - `LLMClient.ask()` 支持可选 `response_format`。
   - OpenAI-compatible provider 会透传 `response_format={"type": "json_object"}`。
   - Anthropic provider 保持同一接口，继续依赖 prompt + schema fallback。
-- [ ] structured-output 后续：
-  - 逐步把 baseline / research / verify 等节点切到 provider 原生 JSON 模式。
-  - 逐步移除 verify 的 legacy verdict fallback。
+- [x] structured-output 后续：
+  - baseline / research / queue / verify 等结构化节点已携带 provider JSON response format。
+  - verify 已移除 legacy verdict 成功判断；非 JSON 输出 fail-closed。
 - [x] runtime state v1：
   - baseline 是否已跑。
   - baseline 是否 green。
-- [ ] runtime state 后续：
+- [x] runtime state 后续：
   - [x] stage request / agent config 已携带当前正在升级的 dependency。
   - [x] stage request / agent config 已携带本轮允许修改的文件范围。
   - [x] runtime guardrail 已使用 `allowed_files` 限制 `write_file` / `edit_file` 范围。
@@ -304,9 +304,9 @@
   - 文件 mutation 超出 `allowed_files` 时直接拦截。
   - 第一次 mutation stage 前检测 target worktree 是否已有改动，dirty 时直接停止。
   - 禁止 `git reset --hard`、`git checkout .`、`git restore .` 等危险全局 revert。
-- [ ] tool guardrails 后续：
+- [x] tool guardrails 后续：
   - [x] 将 dirty target 检测从 CLI stage runner 下沉为通用 orchestrator preflight。
-  - 提供结构化 package-level revert，只允许 revert 本次 package step 的改动。
+  - [x] 提供结构化 `revert_files` 工具，并通过 `allowed_files` 限制可恢复范围。
 - [x] eval runner 已增加 `structured_report` check：
   - 校验 `AgentReport` 形状、`ok`、`changed_files` 和 `remaining_risks`。
   - 校验可选 `failure_reason` / `recovery_suggestions` 字段类型。
@@ -316,7 +316,7 @@
 **验收标准**
 
 - 关键流程违规不只靠 prompt，能被 runtime 拦截或 eval 标记。
-- provider 原生 structured output 接入后，`upgrade` 不再依赖自然语言关键词判断 pass/fail。
+- structured output 接入后，`upgrade` 不再依赖自然语言关键词判断 pass/fail。
 
 ---
 

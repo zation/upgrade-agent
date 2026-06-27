@@ -246,12 +246,14 @@ def test_stage_loop_runner_passes_runtime_scope_to_agent_config(monkeypatch):
             enforce_baseline_guardrail=True,
             current_dependency="mocha",
             allowed_files=("package.json", "package-lock.json"),
+            response_format={"type": "json_object"},
         )
     )
 
     config = calls["config"]
     assert config.current_dependency == "mocha"
     assert config.allowed_files == ("package.json", "package-lock.json")
+    assert config.response_format == {"type": "json_object"}
 
 
 def test_stage_loop_runner_blocks_dirty_worktree_before_first_mutation(
