@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
@@ -28,6 +29,18 @@ def parse_structured_text[SchemaT: BaseModel](text: str, schema: type[SchemaT]) 
         return schema.model_validate(data)
     except ValidationError as e:
         raise StructuredParseError(f"JSON object does not match {schema.__name__}") from e
+
+
+def response_format_for_schema(schema: type[BaseModel]) -> dict[str, Any]:
+    """Build an OpenAI-compatible JSON Schema response format for a Pydantic model."""
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": _schema_name(schema),
+            "strict": True,
+            "schema": _strict_json_schema(schema.model_json_schema()),
+        },
+    }
 
 
 def _extract_json_object(text: str) -> str:
@@ -59,3 +72,20 @@ def _extract_json_object(text: str) -> str:
             if depth == 0:
                 return text[start : index + 1]
     raise StructuredParseError("No complete JSON object found in model output")
+
+
+def _schema_name(schema: type[BaseModel]) -> str:
+    name = re.sub(r"(?<!^)(?=[A-Z])", "_", schema.__name__).lower()
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+
+
+def _strict_json_schema(value: Any) -> Any:
+    """Recursively mark object schemas as closed for provider strict mode."""
+    if isinstance(value, dict):
+        out = {key: _strict_json_schema(item) for key, item in value.items()}
+        if out.get("type") == "object" and "additionalProperties" not in out:
+            out["additionalProperties"] = False
+        return out
+    if isinstance(value, list):
+        return [_strict_json_schema(item) for item in value]
+    return value

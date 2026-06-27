@@ -23,7 +23,7 @@
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
 | M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
 | M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
-| M10 | ⏳ | Provider-native JSON Schema Output | 从 JSON object 升级为 schema-constrained structured output |
+| M10 | ✅ | Provider-native JSON Schema Output | OpenAI-compatible 已升级为 JSON Schema response format，并保留安全 fallback |
 | M11 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
 | M12 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
 
@@ -362,32 +362,32 @@
 
 ## M10：Provider-native JSON Schema Output
 
-**状态**：⏳ 未开始
+**状态**：✅ 已完成
 
 **目标**：把当前 “JSON object + 本地 Pydantic 校验” 升级为 provider 原生 JSON Schema 输出，减少合法 JSON 但字段不符合业务 schema 的情况。
 
 **计划**
 
-- [ ] 从 Pydantic model 自动生成 provider response schema：
+- [x] 从 Pydantic model 自动生成 provider response schema：
   - `BaselineState`
   - `ResearchBrief`
   - `UpgradeQueue`
   - `VerificationResult`
   - `AgentReport`
-- [ ] OpenAI-compatible provider 支持 `response_format={"type": "json_schema", ...}`。
-- [ ] Anthropic provider 评估等价方案：
-  - tool/schema 输出；
-  - prompt + 本地 schema fallback。
-- [ ] graph stage 分阶段切换：
+- [x] OpenAI-compatible provider 支持 `response_format={"type": "json_schema", ...}`。
+- [x] Anthropic provider 评估等价方案：
+  - 当前保持统一接口，不透传 provider-native response format；
+  - 继续使用 prompt + 本地 Pydantic schema fallback，schema-invalid 时 fail-closed。
+- [x] graph stage 分阶段切换：
   - baseline
   - research
   - queue
   - verify / verify_package / final_verify
-  - report
-- [ ] schema-invalid case fail-closed：
+  - report 仍由本地 graph state 生成，但 `AgentReport` 已支持 provider response schema 生成。
+- [x] schema-invalid case fail-closed：
   - provider 不支持 schema 时回退到 JSON object + Pydantic；
   - schema 输出不合格时不能判定成功。
-- [ ] eval 增加 schema-invalid / missing-field case。
+- [x] regression tests 增加 schema-invalid / missing-field case。
 
 **验收标准**
 

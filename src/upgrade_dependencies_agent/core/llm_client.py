@@ -98,6 +98,18 @@ def _sleep_backoff(attempt: int) -> None:
     time.sleep(0.5 * (2**attempt))
 
 
+def _should_fallback_to_json_object(
+    error: Any,
+    response_format: dict[str, Any] | None,
+) -> bool:
+    """Return true when an OpenAI-compatible server rejected native JSON Schema."""
+    return (
+        bool(response_format)
+        and response_format.get("type") == "json_schema"
+        and getattr(error, "status_code", None) in (400, 422)
+    )
+
+
 class AnthropicClient:
     """Claude via the native Anthropic SDK."""
 
@@ -240,6 +252,7 @@ class OpenAICompatibleClient:
         # --- call with retry ---
         model = config.model or self._default_model
         last_err: Exception | None = None
+        requested_response_format = response_format
         for attempt in range(_MAX_RETRIES):
             try:
                 kwargs: dict[str, Any] = dict(
@@ -250,12 +263,15 @@ class OpenAICompatibleClient:
                 )
                 if openai_tools:
                     kwargs["tools"] = openai_tools
-                if response_format:
-                    kwargs["response_format"] = response_format
+                if requested_response_format:
+                    kwargs["response_format"] = requested_response_format
                 resp = self._client.chat.completions.create(**kwargs)
                 return self._normalize(resp)
             except APIStatusError as e:
                 last_err = e
+                if _should_fallback_to_json_object(e, requested_response_format):
+                    requested_response_format = {"type": "json_object"}
+                    continue
                 if e.status_code not in _RETRYABLE:
                     raise
                 _sleep_backoff(attempt)

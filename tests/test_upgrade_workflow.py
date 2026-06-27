@@ -5,6 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from upgrade_dependencies_agent.core import LoopResult
+from upgrade_dependencies_agent.core.structured import response_format_for_schema
+from upgrade_dependencies_agent.orchestrator.state import (
+    BaselineState,
+    ResearchBrief,
+    UpgradeQueue,
+    VerificationResult,
+)
 from upgrade_dependencies_agent.orchestrator.upgrade_workflow import (
     StageLoopRequest,
     run_upgrade_all_backbone_workflow,
@@ -50,15 +57,15 @@ def test_upgrade_workflow_runs_backbone_stages_with_expected_loop_contracts() ->
     )
     assert [request.stage for request in requests] == ["baseline", "research", "execute", "verify"]
     assert requests[0].read_only is False
-    assert requests[0].response_format == {"type": "json_object"}
+    assert requests[0].response_format == response_format_for_schema(BaselineState)
     assert "pre-upgrade baseline" in requests[0].task
     assert requests[1].read_only is True
-    assert requests[1].response_format == {"type": "json_object"}
+    assert requests[1].response_format == response_format_for_schema(ResearchBrief)
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
     assert requests[2].allowed_files == ("package.json", "package-lock.json")
     assert requests[3].read_only is False
-    assert requests[3].response_format == {"type": "json_object"}
+    assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[3].task
     assert result.report is not None
     assert result.report.ok is True
@@ -132,6 +139,24 @@ def test_upgrade_workflow_fails_closed_when_verification_is_unstructured() -> No
     result = run_upgrade_backbone_workflow(
         "mocha 4 -> 11",
         max_heal_attempts=1,
+        run_loop=run_loop,
+    )
+
+    assert not result.ok
+    assert result.state["verification"].ok is False
+    assert result.report is not None
+    assert result.report.failure_reason == "verification_failed"
+
+
+def test_upgrade_workflow_fails_closed_when_verification_is_schema_invalid() -> None:
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        if request.stage == "verify":
+            return _result('{"ok": true}')
+        return _result("stage complete")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=0,
         run_loop=run_loop,
     )
 
@@ -295,9 +320,9 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
         "verify",
     ]
     assert requests[0].read_only is False
-    assert requests[0].response_format == {"type": "json_object"}
+    assert requests[0].response_format == response_format_for_schema(BaselineState)
     assert requests[1].read_only is True
-    assert requests[1].response_format == {"type": "json_object"}
+    assert requests[1].response_format == response_format_for_schema(UpgradeQueue)
     assert "npm_outdated" in requests[1].task
     assert '"packages"' in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
@@ -306,9 +331,9 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert "mocha" in requests[2].task
     assert "Do not upgrade any other package intentionally" in requests[2].task
     assert "mocha" in requests[3].task
-    assert requests[3].response_format == {"type": "json_object"}
+    assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert "chai" in requests[4].task
-    assert requests[6].response_format == {"type": "json_object"}
+    assert requests[6].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[6].task
     assert result.state["queue"].packages[0].name == "mocha"
     assert [item.status for item in result.state["queue"].packages] == ["done", "done"]
