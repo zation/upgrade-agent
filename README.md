@@ -12,9 +12,9 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 
 ## 当前状态
 
-- **M1-M6 ✅**：核心 loop、单依赖升级、批量升级、研究工具、确定性 eval、补测试 workflow
-  都已有可用 v1。
-- **M7+ ⏳**：后续重点是 Prompt / Skill 质量、运行时 guardrails、成本与上下文优化、
+- **M1-M8 ✅**：核心 loop、升级 workflow、研究工具、确定性 eval、补测试 workflow、
+  Prompt / Skill 质量、LangGraph backbone、结构化状态与 runtime guardrails 已完成 v1。
+- **M9-M12 ⏳**：后续重点是成本与上下文优化、provider-native JSON Schema output、
   Research / RAG 深化、CLI / UX 完善。
 
 ## 已实现功能

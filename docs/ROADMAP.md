@@ -23,8 +23,9 @@
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
 | M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
 | M9 | ⏳ | 成本与上下文优化 | 用 eval 数据驱动优化 |
-| M10 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
-| M11 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
+| M10 | ⏳ | Provider-native JSON Schema Output | 从 JSON object 升级为 schema-constrained structured output |
+| M11 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
+| M12 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
 
 ---
 
@@ -86,7 +87,7 @@
 **后续优化位置**
 
 - “必须先 baseline”从 prompt 迁移到 runtime guardrail：见 M8。
-- 结构化报告与 JSON output：见 M8 / M11。
+- 结构化报告与 JSON output：见 M8 / M12。
 
 ---
 
@@ -136,7 +137,7 @@
 - `ResearchBrief` 结构化输出。
 - source coverage eval。
 
-这些作为后续优化放入 M10。
+这些作为后续优化放入 M11。
 
 ---
 
@@ -179,7 +180,7 @@
 - cost metrics / historical result artifacts。
 - CLI `--json` / `--dry-run`。
 
-这些分别放入 M8、M9、M11。
+这些分别放入 M8、M9、M12。
 
 ---
 
@@ -356,7 +357,44 @@
 
 ---
 
-## M10：Research / RAG 深化
+## M10：Provider-native JSON Schema Output
+
+**状态**：⏳ 未开始
+
+**目标**：把当前 “JSON object + 本地 Pydantic 校验” 升级为 provider 原生 JSON Schema 输出，减少合法 JSON 但字段不符合业务 schema 的情况。
+
+**计划**
+
+- [ ] 从 Pydantic model 自动生成 provider response schema：
+  - `BaselineState`
+  - `ResearchBrief`
+  - `UpgradeQueue`
+  - `VerificationResult`
+  - `AgentReport`
+- [ ] OpenAI-compatible provider 支持 `response_format={"type": "json_schema", ...}`。
+- [ ] Anthropic provider 评估等价方案：
+  - tool/schema 输出；
+  - prompt + 本地 schema fallback。
+- [ ] graph stage 分阶段切换：
+  - baseline
+  - research
+  - queue
+  - verify / verify_package / final_verify
+  - report
+- [ ] schema-invalid case fail-closed：
+  - provider 不支持 schema 时回退到 JSON object + Pydantic；
+  - schema 输出不合格时不能判定成功。
+- [ ] eval 增加 schema-invalid / missing-field case。
+
+**验收标准**
+
+- OpenAI-compatible provider 下，核心结构化节点能使用 JSON Schema response format。
+- schema-invalid 输出会被稳定拦截并在 report / eval 中体现。
+- provider 不支持 JSON Schema 时仍能通过现有 fallback 安全运行。
+
+---
+
+## M11：Research / RAG 深化
 
 **状态**：⏳ 未开始
 
@@ -400,7 +438,7 @@
 
 ---
 
-## M11：CLI / UX 与集成体验
+## M12：CLI / UX 与集成体验
 
 **状态**：⏳ 未开始
 
@@ -434,8 +472,11 @@
 3. **M9 成本与上下文优化**  
    基于 eval 输出的成本指标，减少 token 和重复 tool call。
 
-4. **M10 Research / RAG 深化**  
+4. **M10 Provider-native JSON Schema Output**  
+   在结构化状态稳定后，把关键节点升级到 provider 原生 schema 输出。
+
+5. **M11 Research / RAG 深化**  
    在 prompt、eval、结构化状态稳定后，再升级 research pipeline。
 
-5. **M11 CLI / UX 与集成体验**  
+6. **M12 CLI / UX 与集成体验**  
    最后补齐 JSON、dry-run、CI 文档和使用体验。
