@@ -264,7 +264,7 @@ def run_upgrade_all_backbone_workflow(
                     "verify after each package",
                     "run final verification",
                 ],
-                allowed_files=["package.json", "package-lock.json"],
+                allowed_files=[],
             ),
         }
 
@@ -491,7 +491,7 @@ def run_upgrade_all_dry_run_workflow(
             "verify after each package",
             "run final verification",
         ],
-        allowed_files=["package.json", "package-lock.json"],
+        allowed_files=[],
     )
     package_names = ", ".join(item.name for item in queue.packages)
     risks = [f"Planned packages: {package_names}"] if package_names else []
@@ -762,7 +762,7 @@ def _single_upgrade_plan(target: str, state: UpgradeGraphState) -> UpgradePlan:
             "install/update lockfile",
             "run verification tests",
         ],
-        allowed_files=["package.json", "package-lock.json"],
+        allowed_files=[],
     )
 
 

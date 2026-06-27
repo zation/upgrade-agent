@@ -65,7 +65,7 @@ def test_upgrade_workflow_runs_backbone_stages_with_expected_loop_contracts() ->
     assert requests[1].response_format == response_format_for_schema(ResearchBrief)
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
-    assert requests[2].allowed_files == ("package.json", "package-lock.json")
+    assert requests[2].allowed_files == ()
     assert requests[3].read_only is False
     assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[3].task
@@ -106,7 +106,7 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
     heal_request = requests[4]
     assert heal_request.enforce_baseline_guardrail is True
     assert heal_request.current_dependency == "mocha"
-    assert heal_request.allowed_files == ("package.json", "package-lock.json")
+    assert heal_request.allowed_files == ()
     assert "Self-heal" in heal_request.task
 
 
@@ -361,7 +361,7 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert '"packages"' in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
-    assert requests[2].allowed_files == ("package.json", "package-lock.json")
+    assert requests[2].allowed_files == ()
     assert "mocha" in requests[2].task
     assert "Do not upgrade any other package intentionally" in requests[2].task
     assert "mocha" in requests[3].task
@@ -449,7 +449,7 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     ]
     assert requests[5].enforce_baseline_guardrail is True
     assert requests[5].current_dependency == "all direct dependencies"
-    assert requests[5].allowed_files == ("package.json", "package-lock.json")
+    assert requests[5].allowed_files == ()
     assert "batch upgrade" in requests[5].task
 
 

@@ -40,6 +40,7 @@ from .runtime_state import (
     baseline_guardrail,
     dangerous_revert_guardrail,
     mutation_scope_guardrail,
+    shell_safety_guardrail,
     update_runtime_state,
 )
 from .trace import Tracer
@@ -270,6 +271,15 @@ class ReActLoop:
                 )
                 return blocked
         blocked = dangerous_revert_guardrail(call)
+        if blocked is not None:
+            tracer.event(
+                "tool_call",
+                name=call.name,
+                phase="guardrail_blocked",
+                guardrail=blocked.metadata.get("guardrail"),
+            )
+            return blocked
+        blocked = shell_safety_guardrail(call, self.workdir)
         if blocked is not None:
             tracer.event(
                 "tool_call",
