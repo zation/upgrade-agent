@@ -355,6 +355,45 @@ def test_dependency_research_summarizes_registry_metadata(monkeypatch, ctx):
     assert "dependency_research" in {tool.name for tool in read_only_tools()}
 
 
+def test_dependency_research_discovers_readme_and_migration_candidates(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.npm import DependencyResearch
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "name": "mocha",
+                "description": "test framework",
+                "dist-tags": {"latest": "11.0.0"},
+                "repository": {"url": "git+https://github.com/mochajs/mocha.git"},
+                "homepage": "https://mochajs.org",
+                "versions": {
+                    "4.0.0": {},
+                    "11.0.0": {},
+                },
+            }
+
+    def fake_get(url, timeout):
+        assert url == "https://registry.npmjs.org/mocha"
+        assert timeout == 20
+        return FakeResponse()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.npm.httpx.get", fake_get)
+
+    res = DependencyResearch().run({"name": "mocha", "current": "^4.0.0"}, ctx)
+    data = json.loads(res.output)
+
+    assert not res.is_error
+    assert "https://www.npmjs.com/package/mocha?activeTab=readme" in data["candidate_sources"]
+    assert "https://github.com/mochajs/mocha/blob/main/docs/migrating.md" in data[
+        "candidate_sources"
+    ]
+    assert "https://github.com/mochajs/mocha/blob/main/docs/index.md" in data[
+        "candidate_sources"
+    ]
+
+
 # --- structured revert --- #
 
 

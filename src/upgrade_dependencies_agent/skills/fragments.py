@@ -41,10 +41,14 @@ BREAKING_CHANGE_RESEARCH_WORKFLOW = """\
 2. Use dependency_research for the target package to get latest version, \
 major-version span, repository/homepage, and candidate changelog sources.
 3. Use npm_releases to inspect recent versions and identify major boundaries.
-4. Read release notes or changelog sources with fetch_releases/fetch_url. Focus \
-on breaking changes, Node.js minimum version, ESM/CJS changes, peer dependency \
-changes, CLI/config changes, and removed APIs.
-5. Search the target project for actual usage of the dependency so the report \
+4. Read release notes or changelog sources with fetch_releases/fetch_url, then \
+use retrieve_source_chunks on candidate changelog, migration guide, docs, or npm \
+README sources for focused keyword retrieval. Focus on breaking changes, Node.js \
+minimum version, ESM/CJS changes, peer dependency changes, CLI/config changes, \
+and removed APIs.
+5. If source discovery or retrieval has a source gap, say which source was \
+missing or unhelpful and explain that tests must drive verification.
+6. Search the target project for actual usage of the dependency so the report \
 distinguishes relevant project risks from generic upstream changes."""
 
 TEST_GENERATION_WORKFLOW = """\

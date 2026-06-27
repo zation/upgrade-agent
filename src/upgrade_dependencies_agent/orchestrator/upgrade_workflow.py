@@ -473,9 +473,12 @@ def _baseline_task(target: str) -> str:
 def _research_task(target: str) -> str:
     return (
         f"Research this dependency upgrade without editing files: {target}.\n\n"
-        "Use package metadata, release/changelog sources, and project usage search "
-        "to identify relevant breaking changes. Return exactly one JSON object "
-        "with this shape: "
+        "Use package metadata, release/changelog sources, retrieve_source_chunks "
+        "for focused retrieval from changelog, migration guide, docs, or npm README "
+        "sources, and project usage search to identify relevant breaking changes. "
+        "If source discovery or retrieval has a source gap, include that gap and "
+        "explain that tests must drive verification. Return exactly one JSON "
+        "object with this shape: "
         '{"package": "mocha", "current_version": "4.0.0", '
         '"target_version": "11.0.0", "sources": ["https://..."], '
         '"relevant_risks": ["risk summary"]}.'

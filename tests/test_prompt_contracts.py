@@ -47,6 +47,8 @@ def test_upgrade_prompts_use_structured_revert_tool() -> None:
 def test_research_prompt_keeps_read_only_source_and_verdict_contracts() -> None:
     assert READ_ONLY_RULE in BREAKING_CHANGE_RESEARCHER
     assert SOURCE_EVIDENCE_RULE in BREAKING_CHANGE_RESEARCHER
+    assert "retrieve_source_chunks" in BREAKING_CHANGE_RESEARCHER
+    assert "source gap" in BREAKING_CHANGE_RESEARCHER
     assert "VERDICT: LOW" in BREAKING_CHANGE_RESEARCHER
     assert "VERDICT: MEDIUM" in BREAKING_CHANGE_RESEARCHER
     assert "VERDICT: HIGH" in BREAKING_CHANGE_RESEARCHER

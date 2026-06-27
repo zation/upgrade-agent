@@ -218,6 +218,16 @@ def test_upgrade_workflow_parses_structured_research_brief() -> None:
     assert result.state["research"].relevant_risks == ["Node version requirement changed"]
 
 
+def test_upgrade_workflow_research_task_requests_retrieval_and_source_gap_reporting() -> None:
+    from upgrade_dependencies_agent.orchestrator.upgrade_workflow import _research_task
+
+    task = _research_task("mocha 4 -> 11")
+
+    assert "retrieve_source_chunks" in task
+    assert "source gap" in task
+    assert "tests must drive verification" in task
+
+
 def test_upgrade_workflow_plan_uses_structured_research_target_version() -> None:
     def run_loop(request: StageLoopRequest) -> LoopResult:
         if request.stage == "research":

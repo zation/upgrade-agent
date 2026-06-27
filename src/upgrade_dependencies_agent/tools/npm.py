@@ -182,7 +182,7 @@ class DependencyResearch(ToolImpl):
             "description": data.get("description", ""),
             "repository": repository,
             "homepage": homepage,
-            "candidate_sources": _candidate_sources(repository, homepage),
+            "candidate_sources": _candidate_sources(data.get("name", name), repository, homepage),
             "recent_versions": versions[-12:],
             "risk_hints": _risk_hints(current_major, target_major),
         }
@@ -252,8 +252,9 @@ def _risk_hints(current_major: int | None, target_major: int | None) -> list[str
     return hints
 
 
-def _candidate_sources(repository: str, homepage: str) -> list[str]:
+def _candidate_sources(package_name: str, repository: str, homepage: str) -> list[str]:
     sources: list[str] = []
+    sources.append(f"https://www.npmjs.com/package/{package_name}?activeTab=readme")
     if repository:
         sources.append(repository)
         github = _github_owner_repo(repository)
@@ -266,6 +267,10 @@ def _candidate_sources(repository: str, homepage: str) -> list[str]:
                     f"{base}/blob/main/CHANGELOG.md",
                     f"{base}/blob/master/CHANGELOG.md",
                     f"{base}/blob/main/README.md",
+                    f"{base}/blob/main/MIGRATION.md",
+                    f"{base}/blob/main/docs/migrating.md",
+                    f"{base}/blob/main/docs/migration.md",
+                    f"{base}/blob/main/docs/index.md",
                 ]
             )
     if homepage and homepage not in sources:

@@ -122,7 +122,7 @@ peerDependency. This matters for how you update it.""",
         PromptSection(
             "Phase 2: Research breaking changes (spend at most 4 iterations here)",
             BREAKING_CHANGE_RESEARCH_WORKFLOW
-            + "\n6. If release notes are incomplete or hard to find, proceed anyway — "
+            + "\n7. If release notes are incomplete or hard to find, proceed anyway — "
             "the tests will catch real breakage.",
         ),
         PromptSection(
