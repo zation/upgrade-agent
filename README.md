@@ -1,135 +1,219 @@
 # upgrade-dependencies-agent
 
-一个用于旧版 JS/TS 项目的依赖升级与测试补充 agent。项目用 Python 实现，核心是手写
-ReAct loop，并用 LangGraph 做薄编排示例。
+`upgrade-dependencies-agent` is an AI-powered dependency upgrade assistant for
+JavaScript and TypeScript projects. It analyzes legacy package ecosystems, researches
+breaking changes, applies focused dependency updates, adds targeted tests, and verifies
+the result with the project's own commands.
 
-首个目标项目是 [`zation/chai-like`](https://github.com/zation/chai-like)：一个旧版
-chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
+The agent is built for real upgrade work: it combines a ReAct execution loop with
+LangGraph workflow orchestration, provider-neutral LLM support, strict filesystem
+boundaries, structured runtime state, and deterministic evaluation.
 
-本项目也是 AI Agent 工程学习样例：尽量覆盖常见 agent 技术，并把每项技术落到可读代码、
-测试和文档中。架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，路线图见
-[docs/ROADMAP.md](docs/ROADMAP.md)。
+## Why It Stands Out
 
-## 当前状态
+- **End-to-end dependency upgrades**: run baseline checks, research upgrade risks, edit
+  dependency files, verify with tests, and self-heal failed upgrade attempts.
+- **Batch upgrades with control**: upgrade direct dependencies one package at a time,
+  verify each step, and produce a final structured report.
+- **Source-backed research**: inspect npm metadata, GitHub releases, changelogs,
+  migration guides, documentation pages, and project usage before recommending changes.
+- **Test generation workflow**: find weak or missing test coverage, add a focused set of
+  tests, and verify the result against the target project's test command.
+- **CI-friendly output**: use JSON reports, dry-run planning, deterministic eval cases,
+  and objective postcondition checks for automation.
 
-路线图以 [docs/ROADMAP.md](docs/ROADMAP.md) 为准。当前 M1-M11 已完成，M12 正在补齐
-CLI / UX 与 CI 集成体验。
+## Core Capabilities
 
-## 已实现功能
+### Dependency Upgrade Workflows
 
-- 手写 ReAct loop：支持 Think → Act → Observe、多工具调用、最大迭代限制和失败收敛。
-- 多模型适配：支持 Anthropic Claude 和 OpenAI-compatible API，例如 DeepSeek。
-- 工具系统：文件读写、grep/glob、shell、git diff/status、npm outdated/view/releases、
-  依赖研究、GitHub releases 和 URL 抓取。
-- 路径安全：文件工具通过 `safe_resolve()` 限制在目标项目目录内。
-- 依赖升级 workflow：
-  - `upgrade`：单依赖标准入口，使用 LangGraph backbone 执行 baseline → research → plan → execute → verify → report。
-  - `upgrade-all`：批量升级入口，使用 batch backbone 执行 baseline → queue → 逐包 execute/verify → final verify → report。
-- 研究 workflow：`research-upgrade` 只读分析 breaking changes，并结合项目使用方式判断风险。
-- 补测试 workflow：
-  - `analyze-coverage`：只读分析测试缺口。
-  - `generate-tests`：生成小批量测试并验证。
-- 上下文管理：基础 token 估算和历史压缩，避免长运行撑爆上下文。
-- 可观测性：每次运行写入 JSONL trace，CLI 用 Rich 展示迭代、工具调用、token 和结果。
-- 确定性 eval：支持隔离复制目标项目、批量 case、setup/teardown、timeout、客观后置检查、
-  trace 顺序检查、trajectory policy 和 failure reason。
+`upgrade` handles a single dependency through a staged workflow:
 
-## 技术覆盖
-
-| 技术 | 位置 | 状态 |
-|------|------|------|
-| ReAct | `core/react_loop.py` | ✅ |
-| Function Calling / Tool Use | `core/types.py`、`core/llm_client.py` | ✅ |
-| 多模型适配 | `core/llm_client.py` | ✅ |
-| LangGraph 编排 | `orchestrator/upgrade_backbone.py`、`orchestrator/upgrade_workflow.py` | ✅ v1 |
-| Self-healing / Reflection | `upgrade` / `upgrade-all` 的 verify → heal 边 | ✅ v1 |
-| Research / RAG groundwork | `dependency_research`、`fetch_releases`、`fetch_url` | ✅ groundwork |
-| 只读研究子流程 | `research-upgrade` | ✅ |
-| Context engineering | `core/context.py` | ✅ v1 |
-| Observability | `core/trace.py`、`cli/ui.py` | ✅ |
-| Deterministic evals | `evals/runner.py` | ✅ v1 |
-| Structured output / runtime guardrails | `core/structured.py`、`core/runtime_state.py` | ✅ v1 |
-
-## 快速开始
-
-```bash
-# 1. 安装依赖
-uv sync --extra dev
-
-# 2. 配置模型
-cp .env.example .env
-# DeepSeek 或其他 OpenAI-compatible API:
-#   LLM_PROVIDER=openai-compat
-#   LLM_API_KEY=sk-...
-# Anthropic Claude:
-#   LLM_PROVIDER=anthropic
-#   ANTHROPIC_API_KEY=sk-ant-...
-
-# 3. 准备目标项目
-git clone https://github.com/zation/chai-like ../chai-like
-cd ../chai-like && npm install
-
-# 4. 回到本仓库运行 agent
-uv run upgrade-dependencies-agent analyze ../chai-like
-uv run upgrade-dependencies-agent analyze-coverage ../chai-like
-uv run upgrade-dependencies-agent generate-tests ../chai-like "cover uncovered public APIs"
-uv run upgrade-dependencies-agent research-upgrade ../chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade ../chai-like "mocha 4 -> 11"
-uv run upgrade-dependencies-agent upgrade ../chai-like "mocha, nyc" --dry-run --json
-uv run upgrade-dependencies-agent upgrade-all ../chai-like
-uv run upgrade-dependencies-agent ask ../chai-like "your task"
+```text
+baseline -> research -> plan -> execute -> verify -> report
+                         ^              |
+                         |              v
+                         +---- heal <---+
 ```
 
-## CLI 命令
+`upgrade-all` builds a queue from direct dependencies and upgrades them incrementally:
 
-| 命令 | 工具权限 | 用途 |
-|------|----------|------|
-| `analyze <project>` | 只读 | 分析项目结构、依赖和升级风险。 |
-| `analyze-coverage <project> [focus]` | 只读 | 分析测试和 coverage 信号，输出测试缺口。 |
-| `generate-tests <project> [focus]` | 完整工具 | 添加聚焦测试，并运行测试和 coverage 验证。 |
-| `research-upgrade <project> "<dep>"` | 只读 | 升级前研究 breaking changes。 |
-| `upgrade <project> "<dep>"` | 完整工具 | 标准单依赖升级入口：baseline → research → plan → execute → verify → report。 |
-| `upgrade-all <project>` | 完整工具 | 批量升级所有直接依赖：baseline → queue → 逐包 execute/verify → final verify → report。 |
-| `ask <project> "<task>"` | 默认完整工具 | 执行任意任务；可加 `--read-only` 禁用写入和 shell。 |
+```text
+baseline -> queue -> plan -> select package -> execute package -> verify package
+                                                      ^                 |
+                                                      +-----------------+
+                                  -> final verify -> heal if needed -> report
+```
 
-常用参数：
+Both workflows can write a structured `AgentReport` with success state, changed files,
+remaining risks, failure reason, and recovery suggestions.
 
-- `--model` / `-m`：覆盖 `.env` 中的默认模型。
-- `--max-iters`：限制 ReAct loop 最大迭代数。
-- `--verbose` / `-v`：显示更完整的模型输出。
-- `upgrade` / `upgrade-all` 可加 `--report-json <path>` 输出结构化 `AgentReport`；
-  `changed_files` 会优先来自目标 git worktree 的实际状态。
-- `upgrade` / `upgrade-all` 可加 `--json` 向 stdout 输出机器可读 `AgentReport`，适合 CI。
-- `upgrade` / `upgrade-all` 可加 `--dry-run` 只做研究 / 队列 / 计划，不执行写入或安装。
-- `upgrade <project> "mocha, nyc"` 会按显式列表顺序逐个升级，并合成总报告。
+### Research and Retrieval
 
-## Evals
+The research tools combine registry metadata with source discovery and lightweight
+retrieval:
 
-确定性 eval 会把目标项目复制到隔离目录中运行，不直接修改原项目。
+- npm package metadata, versions, dist-tags, repository, homepage, and README signals
+- GitHub release notes with request caching
+- changelog, migration guide, and docs URL fetching
+- heading-based source chunks ranked by upgrade-risk keywords such as breaking changes,
+  removals, deprecations, ESM/CJS, Node version requirements, peer dependencies, CLI
+  changes, and config changes
+- project usage search so generic breaking changes are only promoted when they matter
+  to the target codebase
+
+### Test and Coverage Support
+
+The agent can run a read-only coverage analysis or generate a small, reviewable batch of
+tests. It is instructed to follow the project's existing test style, establish a green
+baseline first, and verify the final result with the available test and coverage signals.
+
+## Safety Model
+
+Dependency upgrades are risky, so the project includes guardrails at multiple layers.
+
+- **Target project isolation**: filesystem tools resolve paths through `safe_resolve()`
+  and cannot escape the target project directory.
+- **Read-only modes**: analysis, research, and dry-run planning use a restricted toolset
+  without file mutation or shell access where appropriate.
+- **Baseline-before-mutation guardrail**: mutation tools and package-manager changes can
+  be blocked until a green test baseline has been observed.
+- **Mutation scope control**: workflow stages pass allowed file scopes to the runtime, so
+  edits can be limited to expected files such as `package.json` and lockfiles.
+- **Dirty worktree preflight**: upgrade mutation stages stop before touching a target
+  project that already has uncommitted changes.
+- **Dangerous revert protection**: broad commands such as `git reset --hard`,
+  `git checkout .`, `git restore .`, and destructive clean operations are blocked.
+- **Structured revert path**: `revert_files` restores explicitly requested tracked files
+  and is subject to the same allowed-file guardrail.
+
+## Technical Architecture
+
+The codebase is organized around clean boundaries:
+
+```text
+src/upgrade_dependencies_agent/
+  core/          provider-neutral ReAct loop, types, tracing, context, guardrails
+  tools/         filesystem, shell, git, npm, changelog, and retrieval tools
+  skills/        task prompts for analysis, upgrade, research, and test generation
+  orchestrator/  LangGraph workflows and structured upgrade state
+  cli/           Typer commands and Rich terminal UI
+evals/           deterministic evaluation harness and cases
+tests/           unit and workflow tests
+```
+
+Key implementation choices:
+
+- **Provider-neutral LLM layer**: Anthropic and OpenAI-compatible APIs are isolated in
+  `core/llm_client.py`.
+- **Native structured output where available**: OpenAI-compatible providers can receive
+  JSON Schema response formats; unsupported providers fall back to prompt-driven JSON
+  plus local Pydantic validation.
+- **Fail-closed verification**: workflow verification expects structured
+  `VerificationResult` JSON. Invalid or unstructured output is treated as a failed
+  verification, not a success.
+- **Context and cost controls**: repeated file reads use per-run cache hits, large
+  lockfiles and coverage reports default to summaries, long changelogs are summarized,
+  and noisy npm output is reduced to the useful diagnostics.
+- **Observable runs**: every run can write JSONL traces with model usage, tool calls,
+  compaction events, and final outcomes.
+
+## User Experience
+
+The CLI is designed for both interactive local use and automation:
+
+- Rich progress output with iteration timing, tool activity, and final run summary
+- `--json` for machine-readable stdout reports
+- `--report-json <path>` for durable `AgentReport` files
+- `--dry-run` for research and planning without mutation
+- `--model` and `--max-iters` for run-time control
+- explicit multi-dependency input, such as `upgrade <project> "mocha, nyc"`, executed
+  sequentially with combined reporting
+
+## Installation
+
+```bash
+uv sync --extra dev
+```
+
+Configure an LLM provider:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set one of the supported provider configurations.
+
+For OpenAI-compatible APIs:
+
+```text
+LLM_PROVIDER=openai-compat
+LLM_API_KEY=sk-...
+# optional: LLM_BASE_URL, LLM_MODEL
+```
+
+For Anthropic:
+
+```text
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+# optional: LLM_MODEL
+```
+
+## Usage
+
+Prepare a target JavaScript or TypeScript project, then run the agent from this
+repository.
+
+```bash
+uv run upgrade-dependencies-agent analyze ../target-project
+uv run upgrade-dependencies-agent analyze-coverage ../target-project
+uv run upgrade-dependencies-agent generate-tests ../target-project "cover uncovered public APIs"
+uv run upgrade-dependencies-agent research-upgrade ../target-project "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade ../target-project "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade ../target-project "mocha, nyc" --dry-run --json
+uv run upgrade-dependencies-agent upgrade-all ../target-project --report-json agent-report.json
+uv run upgrade-dependencies-agent ask ../target-project "inspect upgrade risks for test tooling"
+```
+
+## CLI Reference
+
+| Command | Access | Purpose |
+|---|---|---|
+| `analyze <project>` | Read-only | Profile project structure, dependencies, and upgrade risks. |
+| `analyze-coverage <project> [focus]` | Read-only | Identify missing or weak test coverage. |
+| `generate-tests <project> [focus]` | Full tools | Add focused tests and verify them. |
+| `research-upgrade <project> "<dep>"` | Read-only | Research breaking changes before upgrading. |
+| `upgrade <project> "<dep>"` | Full tools | Upgrade one dependency through the staged workflow. |
+| `upgrade-all <project>` | Full tools | Upgrade direct dependencies one package at a time. |
+| `ask <project> "<task>"` | Configurable | Run a free-form task; add `--read-only` to restrict tools. |
+
+Common options:
+
+- `--model` / `-m`: override the configured model.
+- `--max-iters`: limit ReAct loop iterations.
+- `--verbose` / `-v`: show fuller model output in the terminal UI.
+- `--report-json <path>`: write a structured `AgentReport`.
+- `--json`: print the report as machine-readable stdout.
+- `--dry-run`: research and plan without executing mutation stages.
+
+## Deterministic Evaluation
+
+The eval runner copies a target project into an isolated workspace, runs a case command,
+and checks objective postconditions. It does not rely on an LLM judge.
 
 ```bash
 uv run python -m evals.runner evals/cases/chai-like-mocha-upgrade.json
 uv run python -m evals.runner evals/cases
 ```
 
-当前 eval 不使用 LLM judge，而是检查客观结果：依赖版本、测试命令、git diff 范围、trace
-顺序、是否先跑 baseline、是否一次升级多个依赖等。输出包含 deterministic failure reason，
-便于后续做回归对比。
+Supported checks include package version assertions, command results, git diff scope,
+trace ordering, trajectory policies, structured reports, research source coverage, and
+budget limits for iterations, tool calls, tokens, wall time, and compaction count.
 
-CI 用法示例见 [docs/CI.md](docs/CI.md)。
+## Development Checks
 
-## 项目结构
-
-```text
-src/upgrade_dependencies_agent/
-  core/          模型无关、任务无关的 ReAct core
-  tools/         文件、shell、git、npm、release/source fetching 工具
-  skills/        任务 prompt：分析、升级、研究、补测试
-  orchestrator/  LangGraph workflow
-  cli/           Typer 入口和 Rich 实时 UI
-docs/            架构和路线图
-evals/           deterministic eval runner 和 case
-tests/           单元测试
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -v
 ```
-
-协作规则和注意事项见 [AGENTS.md](AGENTS.md)。
