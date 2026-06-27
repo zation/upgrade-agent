@@ -12,10 +12,8 @@ chai 插件，使用 CommonJS、mocha 4、nyc 11 和早期 Travis 工具链。
 
 ## 当前状态
 
-- **M1-M8 ✅**：核心 loop、升级 workflow、研究工具、确定性 eval、补测试 workflow、
-  Prompt / Skill 质量、LangGraph backbone、结构化状态与 runtime guardrails 已完成 v1。
-- **M9-M12 ⏳**：后续重点是成本与上下文优化、provider-native JSON Schema output、
-  Research / RAG 深化、CLI / UX 完善。
+路线图以 [docs/ROADMAP.md](docs/ROADMAP.md) 为准。当前 M1-M11 已完成，M12 正在补齐
+CLI / UX 与 CI 集成体验。
 
 ## 已实现功能
 
@@ -77,6 +75,7 @@ uv run upgrade-dependencies-agent analyze-coverage ../chai-like
 uv run upgrade-dependencies-agent generate-tests ../chai-like "cover uncovered public APIs"
 uv run upgrade-dependencies-agent research-upgrade ../chai-like "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../chai-like "mocha 4 -> 11"
+uv run upgrade-dependencies-agent upgrade ../chai-like "mocha, nyc" --dry-run --json
 uv run upgrade-dependencies-agent upgrade-all ../chai-like
 uv run upgrade-dependencies-agent ask ../chai-like "your task"
 ```
@@ -100,6 +99,9 @@ uv run upgrade-dependencies-agent ask ../chai-like "your task"
 - `--verbose` / `-v`：显示更完整的模型输出。
 - `upgrade` / `upgrade-all` 可加 `--report-json <path>` 输出结构化 `AgentReport`；
   `changed_files` 会优先来自目标 git worktree 的实际状态。
+- `upgrade` / `upgrade-all` 可加 `--json` 向 stdout 输出机器可读 `AgentReport`，适合 CI。
+- `upgrade` / `upgrade-all` 可加 `--dry-run` 只做研究 / 队列 / 计划，不执行写入或安装。
+- `upgrade <project> "mocha, nyc"` 会按显式列表顺序逐个升级，并合成总报告。
 
 ## Evals
 
@@ -113,6 +115,8 @@ uv run python -m evals.runner evals/cases
 当前 eval 不使用 LLM judge，而是检查客观结果：依赖版本、测试命令、git diff 范围、trace
 顺序、是否先跑 baseline、是否一次升级多个依赖等。输出包含 deterministic failure reason，
 便于后续做回归对比。
+
+CI 用法示例见 [docs/CI.md](docs/CI.md)。
 
 ## 项目结构
 

@@ -25,7 +25,7 @@
 | M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
 | M10 | ✅ | Provider-native JSON Schema Output | OpenAI-compatible 已升级为 JSON Schema response format，并保留安全 fallback |
 | M11 | ✅ | Research / RAG 深化 | source discovery、cache、chunk retrieval、source coverage eval 已完成 |
-| M12 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
+| M12 | 🚧 | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
 
 ---
 
@@ -443,19 +443,19 @@
 
 ## M12：CLI / UX 与集成体验
 
-**状态**：⏳ 未开始
+**状态**：🚧 进行中
 
 **目标**：让工具更适合本地反复使用和 CI 集成。
 
 **计划**
 
-- [ ] CLI `--json`：输出机器可读结果。
-- [ ] CLI `--dry-run`：只 plan / research，不执行 mutating action。
+- [x] CLI `--json`：输出机器可读结果。
+- [x] CLI `--dry-run`：只 plan / research，不执行 mutating action。
 - [ ] 长 run 进度展示优化。
-- [ ] eval runner CI 用法文档。
-- [ ] 多依赖显式指定：例如 `upgrade <project> "mocha, nyc"`。
+- [x] eval runner CI 用法文档。
+- [x] 多依赖显式指定：例如 `upgrade <project> "mocha, nyc"`。
 - [x] 清理兼容入口：已移除 `upgrade-graph` alias。
-- [ ] README 与 ARCHITECTURE 根据新 milestone 同步精简。
+- [x] README 与 ARCHITECTURE 根据新 milestone 同步精简。
 
 **验收标准**
 
