@@ -13,6 +13,8 @@ Design:
 from __future__ import annotations
 
 import re
+import time
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlparse
@@ -21,10 +23,34 @@ import httpx
 
 from ..core.types import ToolImpl, ToolResult
 
-__all__ = ["FetchReleases", "FetchUrl"]
+__all__ = ["FetchReleases", "FetchUrl", "RetrieveSourceChunks"]
 
 _MAX_BYTES = 50_000  # Cap returned content so one fetch can't blow the context.
 _REQUEST_TIMEOUT = 30.0  # seconds
+_DEFAULT_RETRIEVAL_KEYWORDS = [
+    "breaking",
+    "removed",
+    "deprecated",
+    "esm",
+    "cjs",
+    "commonjs",
+    "node minimum",
+    "peer dependency",
+    "cli",
+    "config",
+]
+_FETCH_CACHE_TTL_SECONDS = 60 * 30
+_FETCH_CACHE: dict[str, _FetchedSource] = {}
+
+
+@dataclass(frozen=True)
+class _FetchedSource:
+    url: str
+    final_url: str
+    content_type: str
+    text: str
+    bytes_read: int
+    fetched_at: float
 
 
 # --------------------------------------------------------------------------- #
@@ -194,34 +220,11 @@ class FetchUrl(ToolImpl):
         if parsed.scheme not in ("http", "https"):
             return ToolResult(output=f"Unsupported URL scheme: {parsed.scheme}", is_error=True)
 
-        try:
-            r = httpx.get(
-                url,
-                headers={"User-Agent": "upgrade-dependencies-agent/0.1"},
-                timeout=_REQUEST_TIMEOUT,
-                follow_redirects=True,
-            )
-        except httpx.HTTPError as e:
-            return ToolResult(output=f"Request failed: {e}", is_error=True)
-
-        if r.status_code != 200:
-            return ToolResult(output=f"HTTP {r.status_code} for {url}", is_error=True)
-
-        content_type = r.headers.get("content-type", "")
-
-        if "text/html" in content_type:
-            text = _html_to_text(r.text)
-        elif any(
-            t in content_type
-            for t in ("text/plain", "application/json", "text/markdown", "text/x-markdown")
-        ):
-            text = r.text
-        else:
-            return ToolResult(
-                output=f"Cannot read content-type '{content_type}'. "
-                f"Body is {len(r.content)} bytes of binary/non-text data.",
-                is_error=True,
-            )
+        fetched, cache_hit, error = _fetch_text_source(url)
+        if error:
+            return ToolResult(output=error, is_error=True)
+        assert fetched is not None
+        text = fetched.text
 
         if _looks_like_long_changelog(url, text):
             text = _summarize_long_changelog(text)
@@ -230,8 +233,193 @@ class FetchUrl(ToolImpl):
 
         return ToolResult(
             output=text or "(empty response)",
-            metadata={"url": url, "content_type": content_type, "bytes": len(r.content)},
+            metadata={
+                "url": url,
+                "final_url": fetched.final_url,
+                "content_type": fetched.content_type,
+                "bytes": fetched.bytes_read,
+                "cache_hit": cache_hit,
+            },
         )
+
+
+class RetrieveSourceChunks(ToolImpl):
+    name = "retrieve_source_chunks"
+    description = (
+        "Fetch a changelog, release notes, migration guide, or docs URL, then "
+        "split it into heading-based chunks and return the chunks most relevant "
+        "to dependency-upgrade risks. Use this after dependency_research finds "
+        "candidate sources so research can cite the specific source text it read."
+    )
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "Full URL to fetch and retrieve from."},
+            "keywords": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional keywords or phrases to rank by. Defaults to breaking, "
+                    "removed, deprecated, ESM/CJS, Node minimum, peers, CLI, config."
+                ),
+            },
+            "max_chunks": {
+                "type": "integer",
+                "description": "Maximum ranked chunks to return. Default 5.",
+            },
+        },
+        "required": ["url"],
+    }
+
+    def run(self, args: dict[str, Any], ctx) -> ToolResult:  # type: ignore[override]
+        url = args["url"]
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return ToolResult(output=f"Unsupported URL scheme: {parsed.scheme}", is_error=True)
+
+        fetched, cache_hit, error = _fetch_text_source(url)
+        if error:
+            return ToolResult(output=error, is_error=True)
+        assert fetched is not None
+
+        keywords = [
+            str(keyword).strip().lower()
+            for keyword in args.get("keywords", _DEFAULT_RETRIEVAL_KEYWORDS)
+            if str(keyword).strip()
+        ]
+        max_chunks = max(1, int(args.get("max_chunks", 5)))
+        chunks = _rank_chunks(_chunk_text_by_heading(fetched.text), keywords)[:max_chunks]
+        data = {
+            "source": url,
+            "final_url": fetched.final_url,
+            "content_type": fetched.content_type,
+            "cache_hit": cache_hit,
+            "keywords": keywords,
+            "chunks": chunks,
+            "source_gap": None if chunks else "No chunks matched the requested keywords.",
+        }
+        return ToolResult(
+            output=_json_dumps(data),
+            metadata={
+                "url": url,
+                "final_url": fetched.final_url,
+                "cache_hit": cache_hit,
+                "chunk_count": len(chunks),
+            },
+        )
+
+
+def _fetch_text_source(url: str) -> tuple[_FetchedSource | None, bool, str | None]:
+    cached = _FETCH_CACHE.get(url)
+    now = time.monotonic()
+    if cached and now - cached.fetched_at <= _FETCH_CACHE_TTL_SECONDS:
+        return cached, True, None
+
+    try:
+        r = httpx.get(
+            url,
+            headers={"User-Agent": "upgrade-dependencies-agent/0.1"},
+            timeout=_REQUEST_TIMEOUT,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as e:
+        return None, False, f"Request failed: {e}"
+
+    if r.status_code != 200:
+        return None, False, f"HTTP {r.status_code} for {url}"
+
+    content_type = r.headers.get("content-type", "")
+    if "text/html" in content_type:
+        text = _html_to_text(r.text)
+    elif any(
+        t in content_type
+        for t in ("text/plain", "application/json", "text/markdown", "text/x-markdown")
+    ):
+        text = r.text
+    else:
+        return (
+            None,
+            False,
+            f"Cannot read content-type '{content_type}'. "
+            f"Body is {len(r.content)} bytes of binary/non-text data.",
+        )
+
+    fetched = _FetchedSource(
+        url=url,
+        final_url=str(getattr(r, "url", url)),
+        content_type=content_type,
+        text=text,
+        bytes_read=len(r.content),
+        fetched_at=now,
+    )
+    _FETCH_CACHE[url] = fetched
+    return fetched, False, None
+
+
+def _chunk_text_by_heading(text: str) -> list[dict[str, str]]:
+    lines = text.splitlines()
+    chunks: list[dict[str, str]] = []
+    current_heading = "document"
+    current_lines: list[str] = []
+    for line in lines:
+        heading = _markdown_heading(line)
+        if heading:
+            if current_lines:
+                chunks.append(
+                    {
+                        "heading": current_heading,
+                        "text": "\n".join(current_lines).strip(),
+                    }
+                )
+            current_heading = heading
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_lines:
+        chunks.append({"heading": current_heading, "text": "\n".join(current_lines).strip()})
+    return [chunk for chunk in chunks if chunk["text"]]
+
+
+def _markdown_heading(line: str) -> str | None:
+    match = re.match(r"^\s{0,3}#{1,6}\s+(.+?)\s*$", line)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def _rank_chunks(chunks: list[dict[str, str]], keywords: list[str]) -> list[dict[str, Any]]:
+    ranked: list[dict[str, Any]] = []
+    for index, chunk in enumerate(chunks):
+        searchable = f"{chunk['heading']}\n{chunk['text']}".lower()
+        matched = [keyword for keyword in keywords if keyword in searchable]
+        score = sum(searchable.count(keyword) for keyword in matched)
+        if score == 0:
+            continue
+        ranked.append(
+            {
+                "heading": chunk["heading"],
+                "score": score,
+                "matched_keywords": matched,
+                "text": _truncate_chunk(chunk["text"]),
+                "_index": index,
+            }
+        )
+    ranked.sort(key=lambda chunk: (-chunk["score"], chunk["_index"]))
+    for chunk in ranked:
+        del chunk["_index"]
+    return ranked
+
+
+def _truncate_chunk(text: str) -> str:
+    if len(text) <= 1200:
+        return text
+    return text[:1200] + "\n... (chunk truncated)"
+
+
+def _json_dumps(value: Any) -> str:
+    import json
+
+    return json.dumps(value, indent=2)
 
 
 def _looks_like_long_changelog(url: str, text: str) -> bool:

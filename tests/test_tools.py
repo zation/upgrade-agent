@@ -230,6 +230,87 @@ def test_fetch_url_summarizes_long_changelog(monkeypatch, ctx):
     assert len(res.output) < 4000
 
 
+def test_retrieve_source_chunks_returns_keyword_ranked_chunks(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.changelog import _FETCH_CACHE, RetrieveSourceChunks
+
+    _FETCH_CACHE.clear()
+
+    class FakeResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.headers = {"content-type": "text/markdown"}
+            self.content = b"x"
+            self.text = """# Changelog
+
+## 6.0.0
+Breaking: removed CommonJS support.
+Node minimum is now 18.
+
+## 5.1.0
+Fix install output.
+
+## 5.0.0
+Deprecated legacy CLI config.
+"""
+            self.url = "https://example.test/CHANGELOG.md"
+
+    def fake_get(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.changelog.httpx.get", fake_get)
+
+    res = RetrieveSourceChunks().run(
+        {
+            "url": "https://example.test/CHANGELOG.md",
+            "keywords": ["breaking", "node minimum", "deprecated"],
+        },
+        ctx,
+    )
+    data = json.loads(res.output)
+
+    assert not res.is_error
+    assert data["source"] == "https://example.test/CHANGELOG.md"
+    assert data["chunks"][0]["heading"] == "6.0.0"
+    assert "breaking" in data["chunks"][0]["matched_keywords"]
+    assert "node minimum" in data["chunks"][0]["matched_keywords"]
+    assert data["chunks"][1]["heading"] == "5.0.0"
+
+
+def test_fetch_url_and_retrieve_source_chunks_share_success_cache(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.changelog import (
+        _FETCH_CACHE,
+        FetchUrl,
+        RetrieveSourceChunks,
+    )
+
+    _FETCH_CACHE.clear()
+
+    calls = 0
+
+    class FakeResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.headers = {"content-type": "text/markdown"}
+            self.content = b"x"
+            self.text = "# Changelog\n\n## 2.0.0\nBreaking: removed old API.\n"
+            self.url = "https://example.test/CHANGELOG.md"
+
+    def fake_get(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return FakeResponse()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.changelog.httpx.get", fake_get)
+
+    fetched = FetchUrl().run({"url": "https://example.test/CHANGELOG.md"}, ctx)
+    retrieved = RetrieveSourceChunks().run({"url": "https://example.test/CHANGELOG.md"}, ctx)
+
+    assert not fetched.is_error
+    assert not retrieved.is_error
+    assert calls == 1
+    assert retrieved.metadata["cache_hit"] is True
+
+
 # --- dependency research --- #
 
 

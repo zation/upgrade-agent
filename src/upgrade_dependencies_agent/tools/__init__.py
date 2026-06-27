@@ -9,7 +9,7 @@ shell are opt-in so a caller can start in a read-only "dry-run" mode.
 from __future__ import annotations
 
 from ..core.types import Tool
-from .changelog import FetchReleases, FetchUrl
+from .changelog import FetchReleases, FetchUrl, RetrieveSourceChunks
 from .fs import EditFile, Glob, Grep, ReadFile, WriteFile
 from .git import GitDiff, GitStatus, RevertFiles
 from .npm import DependencyResearch, NpmOutdated, NpmReleases, NpmView
@@ -28,6 +28,7 @@ __all__ = [
     "NpmReleases",
     "NpmView",
     "ReadFile",
+    "RetrieveSourceChunks",
     "RevertFiles",
     "RunCommand",
     "WriteFile",
@@ -50,6 +51,7 @@ def read_only_tools() -> list[Tool]:
         NpmReleases(),
         FetchReleases(),
         FetchUrl(),
+        RetrieveSourceChunks(),
     ]
 
 
@@ -75,4 +77,5 @@ def default_tools() -> list[Tool]:
         NpmReleases(),
         FetchReleases(),
         FetchUrl(),
+        RetrieveSourceChunks(),
     ]
