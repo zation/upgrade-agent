@@ -24,7 +24,7 @@
 | M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
 | M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
 | M10 | ✅ | Provider-native JSON Schema Output | OpenAI-compatible 已升级为 JSON Schema response format，并保留安全 fallback |
-| M11 | ⏳ | Research / RAG 深化 | 从 source fetching 升级为真正 retrieval |
+| M11 | ✅ | Research / RAG 深化 | source discovery、cache、chunk retrieval、source coverage eval 已完成 |
 | M12 | ⏳ | CLI / UX 与集成体验 | JSON/dry-run/CI 等收尾能力 |
 
 ---
@@ -399,27 +399,27 @@
 
 ## M11：Research / RAG 深化
 
-**状态**：⏳ 未开始
+**状态**：✅ 已完成
 
 **目标**：把当前 source fetching 升级为可缓存、可检索、可引用的 research pipeline。
 
-**计划**
+**已完成**
 
-- [ ] 增强 source discovery：
+- [x] 增强 source discovery：
   - GitHub releases
   - CHANGELOG
   - migration guide
   - docs site
   - npm README
-- [ ] 增强错误处理：
+- [x] 增强错误处理：
   - GitHub rate limit
   - 404
   - redirect
   - 非 Markdown / HTML 页面
   - source gap 汇报
-- [ ] changelog / release notes cache：同一 package/version/source 不重复请求。
-- [ ] release notes 按 version 和 heading chunk。
-- [ ] keyword retrieval：
+- [x] changelog / release notes cache：同一 package/version/source 不重复请求。
+- [x] release notes 按 version 和 heading chunk。
+- [x] keyword retrieval：
   - breaking
   - removed
   - deprecated
@@ -427,9 +427,9 @@
   - Node minimum
   - peer dependency
   - CLI / config
-- [ ] 结合 project usage search：只有发现项目使用模式时，才把 generic breaking change 标为相关风险。
-- [ ] 输出结构化 `ResearchBrief`。
-- [ ] read-only research eval：
+- [x] 结合 project usage search：只有发现项目使用模式时，才把 generic breaking change 标为相关风险。
+- [x] 输出结构化 `ResearchBrief`。
+- [x] read-only research eval：
   - `research-upgrade` 不允许产生 git diff。
   - 报告必须包含实际读过的 source。
   - source 不足时必须明确降级为测试驱动验证。

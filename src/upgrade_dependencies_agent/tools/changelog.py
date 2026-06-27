@@ -41,6 +41,7 @@ _DEFAULT_RETRIEVAL_KEYWORDS = [
 ]
 _FETCH_CACHE_TTL_SECONDS = 60 * 30
 _FETCH_CACHE: dict[str, _FetchedSource] = {}
+_RELEASES_CACHE: dict[tuple[str, str, str | None, int], tuple[str, dict[str, Any], float]] = {}
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,13 @@ class FetchReleases(ToolImpl):
         repo = args["repo"]
         tag = args.get("tag")
         limit = args.get("limit", 5)
+        cache_key = (owner, repo, tag, limit)
+        cached = _RELEASES_CACHE.get(cache_key)
+        now = time.monotonic()
+        if cached and now - cached[2] <= _FETCH_CACHE_TTL_SECONDS:
+            output, metadata, _fetched_at = cached
+            return ToolResult(output=output, metadata={**metadata, "cache_hit": True})
+
         if tag:
             url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
         else:
@@ -188,9 +196,11 @@ class FetchReleases(ToolImpl):
         output = "\n\n---\n\n".join(lines)
         if len(output) > _MAX_BYTES:
             output = output[:_MAX_BYTES] + "\n\n... (output truncated)"
+        metadata = {"count": len(releases[:limit]), "cache_hit": False}
+        _RELEASES_CACHE[cache_key] = (output or "No releases found.", metadata, now)
         return ToolResult(
             output=output or "No releases found.",
-            metadata={"count": len(releases[:limit])},
+            metadata=metadata,
         )
 
 

@@ -230,6 +230,40 @@ def test_fetch_url_summarizes_long_changelog(monkeypatch, ctx):
     assert len(res.output) < 4000
 
 
+def test_fetch_releases_caches_successful_github_response(monkeypatch, ctx):
+    from upgrade_dependencies_agent.tools.changelog import _RELEASES_CACHE, FetchReleases
+
+    _RELEASES_CACHE.clear()
+    calls = 0
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "tag_name": "v5.0.0",
+                "name": "v5.0.0",
+                "published_at": "2024-01-01T00:00:00Z",
+                "body": "Breaking: ESM only.",
+            }
+
+    def fake_get(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return FakeResponse()
+
+    monkeypatch.setattr("upgrade_dependencies_agent.tools.changelog.httpx.get", fake_get)
+
+    first = FetchReleases().run({"owner": "chaijs", "repo": "chai", "tag": "v5.0.0"}, ctx)
+    second = FetchReleases().run({"owner": "chaijs", "repo": "chai", "tag": "v5.0.0"}, ctx)
+
+    assert not first.is_error
+    assert not second.is_error
+    assert calls == 1
+    assert second.metadata["cache_hit"] is True
+
+
 def test_retrieve_source_chunks_returns_keyword_ranked_chunks(monkeypatch, ctx):
     from upgrade_dependencies_agent.tools.changelog import _FETCH_CACHE, RetrieveSourceChunks
 
@@ -386,12 +420,10 @@ def test_dependency_research_discovers_readme_and_migration_candidates(monkeypat
 
     assert not res.is_error
     assert "https://www.npmjs.com/package/mocha?activeTab=readme" in data["candidate_sources"]
-    assert "https://github.com/mochajs/mocha/blob/main/docs/migrating.md" in data[
-        "candidate_sources"
-    ]
-    assert "https://github.com/mochajs/mocha/blob/main/docs/index.md" in data[
-        "candidate_sources"
-    ]
+    assert (
+        "https://github.com/mochajs/mocha/blob/main/docs/migrating.md" in data["candidate_sources"]
+    )
+    assert "https://github.com/mochajs/mocha/blob/main/docs/index.md" in data["candidate_sources"]
 
 
 # --- structured revert --- #
