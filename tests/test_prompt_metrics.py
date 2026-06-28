@@ -14,6 +14,6 @@ def test_prompt_char_counts_cover_all_task_prompts() -> None:
         "upgrade",
         "upgrade_all",
         "analyze_coverage",
-        "generate_tests",
+        "improve_tests",
     }
     assert all(count > 0 for count in counts.values())

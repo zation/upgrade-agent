@@ -105,6 +105,45 @@ def test_upgrade_backbone_reports_failure_after_heal_budget() -> None:
     )
 
 
+def test_upgrade_backbone_aborts_when_baseline_is_red() -> None:
+    visited: list[str] = []
+
+    def red_baseline(state: UpgradeGraphState) -> UpgradeGraphState:
+        visited.append("baseline")
+        return {
+            **state,
+            "baseline": BaselineState(
+                ran=True,
+                green=False,
+                command="npm test",
+                summary="1 failing",
+            ),
+        }
+
+    def fail_if_called(stage: str):
+        def runner(state: UpgradeGraphState) -> UpgradeGraphState:
+            raise AssertionError(f"{stage} should not run after a red baseline")
+
+        return runner
+
+    runner = UpgradeBackboneRunner(
+        baseline=red_baseline,
+        research=fail_if_called("research"),
+        plan=fail_if_called("plan"),
+        execute=fail_if_called("execute"),
+        verify=fail_if_called("verify"),
+        heal=fail_if_called("heal"),
+        report=_report,
+        max_heal_attempts=1,
+    )
+
+    result = runner.run("upgrade mocha")
+
+    assert visited == ["baseline"]
+    assert not result.ok
+    assert result.history == ("baseline", "report")
+
+
 def _baseline(state: UpgradeGraphState) -> UpgradeGraphState:
     return {
         **state,

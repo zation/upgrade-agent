@@ -20,7 +20,7 @@
 | M3 | ✅ | 批量升级与 LangGraph 编排 v1 | `upgrade-all` 与早期 graph 示例已完成；后续已在 M8 收敛 |
 | M4 | ✅ | 依赖研究工具 v1 | npm metadata、release/source fetching、read-only researcher 已完成 |
 | M5 | ✅ | 确定性评估框架 v1 | eval runner、batch、trajectory checks、failure reason 已完成 |
-| M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`generate-tests` 已完成首版 |
+| M6 | ✅ | 补测试 workflow v1 | `analyze-coverage`、`improve-tests` 已完成首版 |
 | M7 | ✅ | Prompt / Skill 质量 v1 | 共享片段、结构化 renderer、contract tests、eval fixtures 已完成 |
 | M8 | ✅ | LangGraph Backbone、结构化状态与运行时 Guardrails | backbone、structured artifacts、runtime/tool guardrails 已完成 |
 | M9 | ✅ | 成本与上下文优化 | eval 成本指标、预算阈值、重复读缓存与摘要已完成 |
@@ -195,7 +195,7 @@
 
 - [x] `skills/add_tests/prompts.py`。
 - [x] `analyze-coverage` CLI：只读测试缺口分析。
-- [x] `generate-tests` CLI：生成测试并验证。
+- [x] `improve-tests` CLI：修复测试 baseline，生成测试并验证。
 - [x] prompt 约束：遵守现有测试风格、先 baseline、聚焦小批量、验证 coverage。
 
 **后续优化位置**
@@ -219,7 +219,7 @@
   - task prompt 已通过统一 helper 显式引用共享 contracts。
   - `BREAKING_CHANGE_RESEARCHER` 和 `UPGRADE` 已使用结构化 renderer，并复用 breaking-change
     research workflow section。
-  - `UPGRADE_ALL` 和 `generate-tests` 已使用结构化 renderer；`generate-tests` 复用 test generation
+  - `UPGRADE_ALL` 和 `improve-tests` 已使用结构化 renderer；`improve-tests` 复用 test generation
     workflow section。
   - `analyze` 和 `analyze-coverage` 已使用结构化 renderer，并显式挂载 read-only contract。
 - [x] 继续瘦身 prompt v1：
@@ -233,8 +233,8 @@
   - `upgrade` prompt 必须包含 baseline / verify / minimal change。
   - `upgrade-all` prompt 必须包含 one dependency at a time。
   - `research-upgrade` prompt 必须包含 read-only / sources / verdict。
-  - `generate-tests` prompt 必须包含 existing style / baseline / verify。
-- [x] 为 `upgrade`、`upgrade-all`、`research-upgrade`、`generate-tests` 维护最小 eval fixtures。
+  - `improve-tests` prompt 必须包含 existing style / baseline / verify。
+- [x] 为 `upgrade`、`upgrade-all`、`research-upgrade`、`improve-tests` 维护最小 eval fixtures。
 - [x] 建立 prompt size baseline：
   - 已增加 prompt 字符数统计 helper，后续可用来比较瘦身前后变化。
 

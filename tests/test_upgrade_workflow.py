@@ -65,7 +65,7 @@ def test_upgrade_workflow_runs_backbone_stages_with_expected_loop_contracts() ->
     assert requests[1].response_format == response_format_for_schema(ResearchBrief)
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
-    assert requests[2].allowed_files == ("package.json", "package-lock.json")
+    assert requests[2].allowed_files == ()
     assert requests[3].read_only is False
     assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[3].task
@@ -106,7 +106,7 @@ def test_upgrade_workflow_routes_failed_verification_through_heal() -> None:
     heal_request = requests[4]
     assert heal_request.enforce_baseline_guardrail is True
     assert heal_request.current_dependency == "mocha"
-    assert heal_request.allowed_files == ("package.json", "package-lock.json")
+    assert heal_request.allowed_files == ()
     assert "Self-heal" in heal_request.task
 
 
@@ -187,6 +187,37 @@ def test_upgrade_workflow_parses_structured_baseline_state() -> None:
     assert result.state["baseline"].green is True
     assert result.state["baseline"].command == "npm test"
     assert result.state["baseline"].summary == "28 passing"
+
+
+def test_upgrade_workflow_aborts_when_baseline_is_red() -> None:
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        requests.append(request)
+        if request.stage == "baseline":
+            return _result(
+                '{"ran": true, "green": false, "command": "npm test", "summary": "1 failing"}'
+            )
+        raise AssertionError(f"{request.stage} should not run after a red baseline")
+
+    result = run_upgrade_backbone_workflow(
+        "mocha 4 -> 11",
+        max_heal_attempts=1,
+        run_loop=run_loop,
+        collect_changed_files=lambda: ["package.json"],
+    )
+
+    assert [request.stage for request in requests] == ["baseline"]
+    assert result.history == ("baseline", "report")
+    assert result.report is not None
+    assert result.report.ok is False
+    assert result.report.changed_files == ["package.json"]
+    assert result.report.failure_reason == "baseline_failed"
+    assert "Target project baseline is not green" in result.report.summary
+    assert "1 failing" in result.report.summary
+    assert "Fix the target project's existing baseline failures before upgrading." in (
+        result.report.recovery_suggestions
+    )
 
 
 def test_upgrade_workflow_parses_structured_research_brief() -> None:
@@ -361,12 +392,14 @@ def test_upgrade_all_workflow_runs_batch_backbone_stages() -> None:
     assert '"packages"' in requests[1].task
     assert requests[2].enforce_baseline_guardrail is True
     assert requests[2].current_dependency == "mocha"
-    assert requests[2].allowed_files == ("package.json", "package-lock.json")
+    assert requests[2].allowed_files == ()
+    assert requests[2].max_iterations == 30
     assert "mocha" in requests[2].task
     assert "Do not upgrade any other package intentionally" in requests[2].task
     assert "mocha" in requests[3].task
     assert requests[3].response_format == response_format_for_schema(VerificationResult)
     assert "chai" in requests[4].task
+    assert requests[4].max_iterations == 30
     assert requests[6].response_format == response_format_for_schema(VerificationResult)
     assert '"ok"' in requests[6].task
     assert result.state["queue"].packages[0].name == "mocha"
@@ -396,6 +429,36 @@ def test_upgrade_all_workflow_parses_structured_baseline_state() -> None:
     assert result.state["baseline"].green is False
     assert result.state["baseline"].command == "npm test"
     assert result.state["baseline"].summary == "1 failing"
+
+
+def test_upgrade_all_workflow_aborts_when_baseline_is_red() -> None:
+    requests: list[StageLoopRequest] = []
+
+    def run_loop(request: StageLoopRequest) -> LoopResult:
+        requests.append(request)
+        if request.stage == "baseline":
+            return _result(
+                '{"ran": true, "green": false, "command": "npm test", "summary": "16 failing"}'
+            )
+        raise AssertionError(f"{request.stage} should not run after a red baseline")
+
+    result = run_upgrade_all_backbone_workflow(
+        max_heal_attempts=1,
+        run_loop=run_loop,
+        collect_changed_files=lambda: ["package.json"],
+    )
+
+    assert [request.stage for request in requests] == ["baseline"]
+    assert result.history == ("baseline", "report")
+    assert result.report is not None
+    assert result.report.ok is False
+    assert result.report.changed_files == ["package.json"]
+    assert result.report.failure_reason == "baseline_failed"
+    assert "Target project baseline is not green" in result.report.summary
+    assert "16 failing" in result.report.summary
+    assert "Fix the target project's existing baseline failures before upgrading." in (
+        result.report.recovery_suggestions
+    )
 
 
 def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
@@ -449,7 +512,7 @@ def test_upgrade_all_workflow_routes_failed_final_verify_through_heal() -> None:
     ]
     assert requests[5].enforce_baseline_guardrail is True
     assert requests[5].current_dependency == "all direct dependencies"
-    assert requests[5].allowed_files == ("package.json", "package-lock.json")
+    assert requests[5].allowed_files == ()
     assert "batch upgrade" in requests[5].task
 
 

@@ -53,11 +53,14 @@ distinguishes relevant project risks from generic upstream changes."""
 
 TEST_GENERATION_WORKFLOW = """\
 1. Establish a green baseline first. Read package.json, run npm test, and record \
-the exact passing/failing count. If the baseline is red, stop and report. If no \
-npm test script exists, inspect package.json and choose the smallest viable test \
-harness, preferring an existing dependency or Node's built-in test runner. Add \
-the minimal test script needed to run the new tests, then treat the first \
-successful run as the baseline for this new test harness.
+the exact passing/failing count. If the baseline is red, repair an existing \
+failing test baseline before adding new coverage: read the failing tests and \
+related source, make the smallest targeted fix to tests or production code, \
+then rerun npm test. If no npm test script exists, inspect package.json and \
+choose the smallest viable test harness, preferring an existing dependency or \
+Node's built-in test runner. Add the minimal test script needed to run the new \
+tests, then treat the first successful run as the baseline for this new test \
+harness.
 2. Inspect existing tests before writing anything. Follow the existing test \
 style, assertion library, file naming, fixture setup, and module import style.
 3. Identify a small test gap list from source/tests/coverage. If the user gave \

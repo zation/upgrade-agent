@@ -242,6 +242,35 @@ def test_allowed_files_guardrail_blocks_revert_outside_scope(
     assert "outside the allowed mutation scope" in _last_tool_result_content(result)
 
 
+def test_package_revert_guardrail_blocks_whole_package_manifest_revert(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("revert_files", {"paths": ["package.json", "package-lock.json"]}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(
+            system_prompt="",
+            max_iterations=3,
+            enforce_baseline_guardrail=True,
+            current_dependency="beeper",
+        ),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then package revert")
+
+    assert result.ok
+    assert "package-level revert" in _last_tool_result_content(result)
+
+
 def test_allowed_files_guardrail_allows_file_mutation_inside_scope(
     tmp_path: Path,
 ) -> None:
@@ -295,6 +324,56 @@ def test_revert_guardrail_blocks_dangerous_git_reset_after_green_baseline(
     assert "dangerous revert command" in _last_tool_result_content(result)
 
 
+def test_shell_guardrail_blocks_git_stash_after_green_baseline(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("run_command", {"command": "git stash"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then stash")
+
+    assert result.ok
+    assert "unsafe shell command" in _last_tool_result_content(result)
+
+
+def test_shell_guardrail_blocks_writes_outside_workdir_after_green_baseline(
+    tmp_path: Path,
+) -> None:
+    outside_file = tmp_path.parent / "outside-agent-write.txt"
+    outside_file.unlink(missing_ok=True)
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response("run_command", {"command": f"echo pwned > {outside_file}"}),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then write outside")
+
+    assert result.ok
+    assert not outside_file.exists()
+    assert "outside the target project" in _last_tool_result_content(result)
+    assert ".upgrade-agent/tmp/" in _last_tool_result_content(result)
+
+
 def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
     tmp_path: Path,
 ) -> None:
@@ -317,6 +396,38 @@ def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
 
     assert result.ok
     assert "$ git diff --name-only" in _last_tool_result_content(result)
+
+
+def test_shell_guardrail_allows_project_local_temp_output_after_green_baseline(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response(
+                "run_command",
+                {
+                    "command": (
+                        "mkdir -p .upgrade-agent/tmp && "
+                        "npx mocha --reporter spec > .upgrade-agent/tmp/mocha_output.txt"
+                    )
+                },
+            ),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then project local temp output")
+
+    assert result.ok
+    assert "unsafe shell command" not in _last_tool_result_content(result)
 
 
 def test_react_loop_passes_response_format_to_client(tmp_path: Path) -> None:

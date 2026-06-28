@@ -33,6 +33,10 @@ before proposing or making changes. Never guess at a file's contents.
 edits over rewriting whole files.
 - VERIFY with evidence. Don't claim success — run the build/tests and read the \
 actual output. Test failures are information, not setbacks; diagnose them.
+- Keep temporary artifacts inside the target project. If you need to capture \
+long command output, create a project-local path such as \
+`.upgrade-agent/tmp/output.txt`; never write to `/tmp` or another path outside \
+the target project.
 - One thing at a time. Do not batch unrelated changes. Finish and verify one \
 step before starting the next.
 - Report clearly. When you finish, summarize what changed, what you verified, \

@@ -22,7 +22,8 @@ def test_help_lists_upgrade_all_command():
     assert result.exit_code == 0
     assert "upgrade-dependencies-agent" in result.output
     assert "analyze-coverage" in result.output
-    assert "generate-tests" in result.output
+    assert "improve-tests" in result.output
+    assert "generate-tests" not in result.output
     assert "research-upgrade" in result.output
     assert "upgrade-all" in result.output
     assert "upgrade-graph" not in result.output
@@ -49,14 +50,144 @@ def test_add_tests_analyze_prompt_is_read_only_gap_finder():
     assert "file / function / suggested test scenarios" in skills.ADD_TESTS_ANALYZE
 
 
-def test_add_tests_generate_prompt_requires_existing_style_and_verification():
-    assert hasattr(skills, "ADD_TESTS_GENERATE")
-    assert "generate tests" in skills.ADD_TESTS_GENERATE
-    assert "Follow the existing test style" in skills.ADD_TESTS_GENERATE
-    assert "test/*.test.js" in skills.ADD_TESTS_GENERATE
-    assert "If no npm test script exists" in skills.ADD_TESTS_GENERATE
-    assert "Run npm test" in skills.ADD_TESTS_GENERATE
-    assert "coverage improves" in skills.ADD_TESTS_GENERATE
+def test_add_tests_improve_prompt_repairs_baseline_then_adds_tests():
+    assert hasattr(skills, "ADD_TESTS_IMPROVE")
+    assert not hasattr(skills, "ADD_TESTS_GENERATE")
+    assert "repair an existing failing test baseline" in skills.ADD_TESTS_IMPROVE
+    assert "Follow the existing test style" in skills.ADD_TESTS_IMPROVE
+    assert "test/*.test.js" in skills.ADD_TESTS_IMPROVE
+    assert "If no npm test script exists" in skills.ADD_TESTS_IMPROVE
+    assert "Run npm test" in skills.ADD_TESTS_IMPROVE
+    assert "coverage improves" in skills.ADD_TESTS_IMPROVE
+
+
+def test_improve_tests_green_existing_tests_exits_without_agent(monkeypatch, tmp_path):
+    def fail_create_client():
+        raise AssertionError("LLM client must not be created when existing tests already pass")
+
+    class FailLoop:
+        def __init__(self, **kwargs):
+            raise AssertionError("agent must not run when existing tests already pass")
+
+    monkeypatch.setattr(cli, "create_client", fail_create_client)
+    monkeypatch.setattr(cli, "ReActLoop", FailLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=0,
+            output="> project test\n> mocha\n\n  2 passing\n",
+        ),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
+
+    assert result.exit_code == 0
+    assert "Existing npm test baseline is green" in result.output
+    assert "No new tests were added" in result.output
+
+
+def test_improve_tests_red_baseline_passes_structured_summary_to_agent(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    class FakeLoop:
+        def __init__(self, *, client, config, tools, workdir, callbacks):
+            calls["config"] = config
+            calls["workdir"] = workdir
+
+        def run(self, task: str):
+            calls["task"] = task
+            return SimpleNamespace(ok=True)
+
+    baseline_output = """
+  beep()
+    1) should send the right code to stdout
+
+  2 passing
+  1 failing
+
+  1) beep()
+       should send the right code to stdout:
+     AssertionError: expected undefined to equal '\x07'
+      at Context.<anonymous> (test/beep.js:15:25)
+"""
+
+    monkeypatch.setattr(cli, "create_client", lambda: "client")
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(returncode=1, output=baseline_output),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
+
+    assert result.exit_code == 0
+    task = str(calls["task"])
+    assert "The existing npm test baseline has already been run by the CLI" in task
+    assert "Repair only the existing failing baseline first" in task
+    assert "Do not add new tests or inspect coverage until npm test is green" in task
+    assert "Focused repair loop" in task
+    assert "Work on one failing test or one failing test file at a time" in task
+    assert "Run at most two diagnostic commands before making a minimal edit" in task
+    assert "After each edit, run the narrowest relevant test command first" in task
+    assert "test/beep.js" in task
+    assert "should send the right code to stdout" in task
+    assert ".upgrade-agent/tmp/improve-tests-baseline.txt" in task
+    assert "Start by establishing the existing npm test baseline" not in task
+
+
+def test_improve_tests_writes_baseline_output_inside_project(monkeypatch, tmp_path):
+    class FakeLoop:
+        def __init__(self, **kwargs):
+            pass
+
+        def run(self, task: str):
+            return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "create_client", lambda: "client")
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=1,
+            output="1 failing\n1) log()\n   AssertionError: expected x\n",
+        ),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path)])
+
+    assert result.exit_code == 0
+    output_path = tmp_path / ".upgrade-agent" / "tmp" / "improve-tests-baseline.txt"
+    assert output_path.read_text(encoding="utf-8") == (
+        "1 failing\n1) log()\n   AssertionError: expected x\n"
+    )
+
+
+def test_run_test_baseline_uses_pty_runner(monkeypatch):
+    calls: dict[str, object] = {}
+
+    def fake_pty_runner(command, *, workdir, timeout):
+        calls["command"] = command
+        calls["workdir"] = workdir
+        calls["timeout"] = timeout
+        return cli._BaselineCommandResult(returncode=2, output="1 failing\n")
+
+    monkeypatch.setattr(cli, "_run_command_with_pty", fake_pty_runner)
+
+    result = cli._run_test_baseline("/tmp/project")
+
+    assert result.returncode == 2
+    assert result.output == "1 failing\n"
+    assert calls == {
+        "command": ["npm", "test"],
+        "workdir": "/tmp/project",
+        "timeout": 120,
+    }
 
 
 def test_upgrade_graph_cli_is_removed(tmp_path):
@@ -80,6 +211,7 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11"])
@@ -89,6 +221,122 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
     assert callable(calls["collect_changed_files"])
+
+
+def test_upgrade_cli_reports_dirty_worktree_before_baseline(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a dirty worktree")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
+
+    assert result.exit_code == 1
+    report = json.loads(result.output)
+    assert report["ok"] is False
+    assert report["failure_reason"] == "dirty_worktree"
+    assert "Target git worktree is not clean" in report["summary"]
+    assert any(
+        "Commit, stash, or remove existing changes" in suggestion
+        for suggestion in report["recovery_suggestions"]
+    )
+    assert "package.json" in report["summary"]
+
+
+def test_upgrade_cli_prints_preflight_failure_guidance(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a dirty worktree")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11"])
+
+    assert result.exit_code == 1
+    assert "Target git worktree is not clean" in result.output
+    assert "Commit, stash, or remove existing changes" in result.output
+
+
+def test_upgrade_cli_reports_failing_test_baseline_before_workflow(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "package.json").write_text(
+        '{"scripts": {"test": "node -e \\"process.exit(1)\\""}}',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "baseline"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a red baseline")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
+
+    assert result.exit_code == 1
+    report = json.loads(result.output)
+    assert report["ok"] is False
+    assert report["failure_reason"] == "baseline_failed"
+    assert "Target test baseline failed before upgrade" in report["summary"]
+    assert "improve-tests" in report["recovery_suggestions"][0]
+    assert any(
+        "Fix the existing tests manually" in suggestion
+        for suggestion in report["recovery_suggestions"]
+    )
+
+
+def test_upgrade_cli_reports_mocha_failure_markers_even_with_zero_exit(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(cli, "check_clean_worktree", lambda workdir: SimpleNamespace(ok=True))
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=0,
+            output="""
+  PluginError()
+    1) should print the plugin name in toString
+    2) should not include the stack by default in toString
+  beep()
+""",
+        ),
+    )
+
+    result = cli._upgrade_cli_preflight(str(tmp_path))
+
+    assert result is not None
+    assert result.report is not None
+    assert result.report.ok is False
+    assert result.report.failure_reason == "baseline_failed"
+    assert "Target test baseline failed before upgrade" in result.report.summary
+    assert "improve-tests" in result.report.recovery_suggestions[0]
 
 
 def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
@@ -109,6 +357,7 @@ def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -142,6 +391,7 @@ def test_upgrade_cli_prints_machine_readable_json(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
@@ -210,6 +460,7 @@ def test_upgrade_cli_runs_explicit_dependency_list_sequentially(monkeypatch, tmp
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
@@ -243,6 +494,7 @@ def test_upgrade_cli_reports_failed_explicit_dependency(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
@@ -265,6 +517,7 @@ def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path)])
@@ -293,6 +546,7 @@ def test_upgrade_all_cli_writes_structured_report(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--report-json", str(report_path)])
@@ -319,6 +573,7 @@ def test_upgrade_all_cli_prints_machine_readable_json(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--json"])
@@ -442,11 +697,13 @@ def test_stage_loop_runner_passes_runtime_scope_to_agent_config(monkeypatch):
             enforce_baseline_guardrail=True,
             current_dependency="mocha",
             allowed_files=("package.json", "package-lock.json"),
+            max_iterations=7,
             response_format={"type": "json_object"},
         )
     )
 
     config = calls["config"]
+    assert config.max_iterations == 7
     assert config.current_dependency == "mocha"
     assert config.allowed_files == ("package.json", "package-lock.json")
     assert config.response_format == {"type": "json_object"}

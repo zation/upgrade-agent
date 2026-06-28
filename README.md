@@ -155,7 +155,7 @@ repository.
 ```bash
 uv run upgrade-dependencies-agent analyze ../target-project
 uv run upgrade-dependencies-agent analyze-coverage ../target-project
-uv run upgrade-dependencies-agent generate-tests ../target-project "cover uncovered public APIs"
+uv run upgrade-dependencies-agent improve-tests ../target-project "cover uncovered public APIs"
 uv run upgrade-dependencies-agent research-upgrade ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../target-project "mocha, nyc" --dry-run --json
@@ -169,7 +169,7 @@ uv run upgrade-dependencies-agent ask ../target-project "inspect upgrade risks f
 |---|---|---|
 | `analyze <project>` | Read-only | Profile project structure, dependencies, and upgrade risks. |
 | `analyze-coverage <project> [focus]` | Read-only | Identify missing or weak test coverage. |
-| `generate-tests <project> [focus]` | Full tools | Add focused tests and verify them. |
+| `improve-tests <project> [focus]` | Full tools | Repair a failing test baseline, add focused tests, and verify them. |
 | `research-upgrade <project> "<dep>"` | Read-only | Research breaking changes before upgrading. |
 | `upgrade <project> "<dep>"` | Full tools | Upgrade one dependency through the staged workflow. |
 | `upgrade-all <project>` | Full tools | Upgrade direct dependencies one package at a time. |

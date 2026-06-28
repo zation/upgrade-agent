@@ -40,6 +40,7 @@ class StageLoopRequest:
     enforce_baseline_guardrail: bool = False
     current_dependency: str | None = None
     allowed_files: tuple[str, ...] = ()
+    max_iterations: int | None = None
     response_format: dict[str, object] | None = None
 
 
@@ -49,6 +50,7 @@ BASELINE_RESPONSE_FORMAT = response_format_for_schema(BaselineState)
 RESEARCH_RESPONSE_FORMAT = response_format_for_schema(ResearchBrief)
 QUEUE_RESPONSE_FORMAT = response_format_for_schema(UpgradeQueue)
 VERIFICATION_RESPONSE_FORMAT = response_format_for_schema(VerificationResult)
+PACKAGE_EXECUTE_MAX_ITERATIONS = 30
 
 
 def run_upgrade_backbone_workflow(
@@ -142,7 +144,7 @@ def run_upgrade_backbone_workflow(
     def report(state: UpgradeGraphState) -> UpgradeGraphState:
         verification = state.get("verification")
         changed_files = _collect_changed_files(state, collect_changed_files)
-        report_artifact = _single_agent_report(changed_files, verification)
+        report_artifact = _single_agent_report(state, changed_files, verification)
         return {
             **state,
             "changed_files": changed_files,
@@ -264,7 +266,7 @@ def run_upgrade_all_backbone_workflow(
                     "verify after each package",
                     "run final verification",
                 ],
-                allowed_files=["package.json", "package-lock.json"],
+                allowed_files=[],
             ),
         }
 
@@ -307,6 +309,7 @@ def run_upgrade_all_backbone_workflow(
                 enforce_baseline_guardrail=True,
                 current_dependency=item.name,
                 allowed_files=_allowed_files_from_state(package_state),
+                max_iterations=PACKAGE_EXECUTE_MAX_ITERATIONS,
             )
         )
         return {
@@ -421,7 +424,14 @@ def run_upgrade_all_backbone_workflow(
     graph.add_node("heal", heal)
     graph.add_node("report", report)
     graph.set_entry_point("baseline")
-    graph.add_edge("baseline", "queue")
+    graph.add_conditional_edges(
+        "baseline",
+        _route_after_baseline,
+        {
+            "queue": "queue",
+            "report": "report",
+        },
+    )
     graph.add_edge("queue", "plan")
     graph.add_edge("plan", "select_package")
     graph.add_conditional_edges(
@@ -491,7 +501,7 @@ def run_upgrade_all_dry_run_workflow(
             "verify after each package",
             "run final verification",
         ],
-        allowed_files=["package.json", "package-lock.json"],
+        allowed_files=[],
     )
     package_names = ", ".join(item.name for item in queue.packages)
     risks = [f"Planned packages: {package_names}"] if package_names else []
@@ -530,6 +540,11 @@ def _history_stage(
 
 def _route_after_batch_select(state: UpgradeGraphState) -> str:
     return "execute_package" if _current_queue_item(state) else "final_verify"
+
+
+def _route_after_baseline(state: UpgradeGraphState) -> str:
+    baseline = state.get("baseline")
+    return "queue" if baseline and baseline.green else "report"
 
 
 def _route_after_batch_verify(state: UpgradeGraphState) -> str:
@@ -762,7 +777,7 @@ def _single_upgrade_plan(target: str, state: UpgradeGraphState) -> UpgradePlan:
             "install/update lockfile",
             "run verification tests",
         ],
-        allowed_files=["package.json", "package-lock.json"],
+        allowed_files=[],
     )
 
 
@@ -771,6 +786,10 @@ def _batch_agent_report(
     changed_files: list[str],
     verification: VerificationResult | None,
 ) -> AgentReport:
+    baseline = state.get("baseline")
+    if not baseline or not baseline.green:
+        return _baseline_failure_report(baseline, changed_files)
+
     ok = bool(verification and verification.ok)
     verification_summary = verification.summary if verification else "verification did not run"
     package_results = state.get("package_results", [])
@@ -806,9 +825,14 @@ def _batch_agent_report(
 
 
 def _single_agent_report(
+    state: UpgradeGraphState,
     changed_files: list[str],
     verification: VerificationResult | None,
 ) -> AgentReport:
+    baseline = state.get("baseline")
+    if not baseline or not baseline.green:
+        return _baseline_failure_report(baseline, changed_files)
+
     ok = bool(verification and verification.ok)
     summary = verification.summary if verification else "verification did not run"
     return AgentReport(
@@ -818,6 +842,27 @@ def _single_agent_report(
         remaining_risks=[] if ok else ["upgrade verification failed"],
         failure_reason=None if ok else "verification_failed",
         recovery_suggestions=[] if ok else [f"Inspect verification failure: {summary}"],
+    )
+
+
+def _baseline_failure_report(
+    baseline: BaselineState | None,
+    changed_files: list[str],
+) -> AgentReport:
+    command = baseline.command if baseline and baseline.command else "npm test"
+    summary = baseline.summary if baseline and baseline.summary else "baseline did not pass"
+    return AgentReport(
+        ok=False,
+        summary=(
+            "Target project baseline is not green; aborting before dependency upgrade work. "
+            f"{command}: {summary}"
+        ),
+        changed_files=changed_files,
+        remaining_risks=["target project baseline is red"],
+        failure_reason="baseline_failed",
+        recovery_suggestions=[
+            "Fix the target project's existing baseline failures before upgrading.",
+        ],
     )
 
 

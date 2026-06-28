@@ -1,5 +1,5 @@
 {
-  "name": "sample generate focused tests",
+  "name": "sample improve focused tests",
   "target": "../target-project",
   "timeout": 1800,
   "env": {},
@@ -8,7 +8,7 @@
     "uv",
     "run",
     "upgrade-dependencies-agent",
-    "generate-tests",
+    "improve-tests",
     "{workdir}",
     "cover uncovered public APIs"
   ],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from upgrade_dependencies_agent.skills import (
     ADD_TESTS_ANALYZE,
-    ADD_TESTS_GENERATE,
+    ADD_TESTS_IMPROVE,
     ANALYZE,
     BASE_AGENT,
     BREAKING_CHANGE_RESEARCHER,
@@ -54,10 +54,11 @@ def test_research_prompt_keeps_read_only_source_and_verdict_contracts() -> None:
     assert "VERDICT: HIGH" in BREAKING_CHANGE_RESEARCHER
 
 
-def test_generate_tests_prompt_keeps_style_baseline_and_verify_contracts() -> None:
-    assert TEST_STYLE_RULE in ADD_TESTS_GENERATE
-    assert BASELINE_RULE in ADD_TESTS_GENERATE
-    assert VERIFY_RULE in ADD_TESTS_GENERATE
+def test_improve_tests_prompt_keeps_style_baseline_and_verify_contracts() -> None:
+    assert TEST_STYLE_RULE in ADD_TESTS_IMPROVE
+    assert BASELINE_RULE in ADD_TESTS_IMPROVE
+    assert VERIFY_RULE in ADD_TESTS_IMPROVE
+    assert "repair an existing failing test baseline" in ADD_TESTS_IMPROVE
 
 
 def test_shared_contracts_render_with_consistent_heading_and_bullets() -> None:
@@ -84,6 +85,7 @@ def test_upgrade_prompts_do_not_repeat_contract_rules_in_legacy_rules_section() 
 def test_base_agent_keeps_global_principles_not_tool_inventory() -> None:
     assert "Core operating principles:" in BASE_AGENT
     assert "You have tools for" not in BASE_AGENT
+    assert ".upgrade-agent/tmp/" in BASE_AGENT
 
 
 def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:
@@ -91,8 +93,8 @@ def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:
     assert BREAKING_CHANGE_RESEARCH_WORKFLOW in UPGRADE
 
 
-def test_generate_tests_uses_shared_test_generation_workflow() -> None:
-    assert TEST_GENERATION_WORKFLOW in ADD_TESTS_GENERATE
+def test_improve_tests_uses_shared_test_generation_workflow() -> None:
+    assert TEST_GENERATION_WORKFLOW in ADD_TESTS_IMPROVE
 
 
 def test_read_only_analysis_prompts_keep_read_only_contract() -> None:
