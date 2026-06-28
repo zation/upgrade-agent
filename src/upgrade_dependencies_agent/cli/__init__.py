@@ -174,6 +174,13 @@ def improve_tests(
     console.rule(f"[bold]improving tests[/bold] in {workdir}")
     baseline = _run_test_baseline(workdir)
     baseline_output_path = _write_improve_tests_baseline_output(workdir, baseline.output)
+    baseline_red = baseline.returncode != 0 or _baseline_output_indicates_failure(baseline.output)
+    if not baseline_red and _baseline_output_indicates_existing_tests(baseline.output):
+        console.print(
+            "[green]Existing npm test baseline is green.[/green] "
+            f"Full output: {baseline_output_path}. No new tests were added."
+        )
+        raise typer.Exit(code=0)
 
     client = create_client()
     loop = ReActLoop(
@@ -430,6 +437,16 @@ def _baseline_output_indicates_failure(output: str) -> bool:
         r"(?im)\btests?\s+failed\b",
     )
     return any(re.search(pattern, output) for pattern in failure_patterns)
+
+
+def _baseline_output_indicates_existing_tests(output: str) -> bool:
+    test_patterns = (
+        r"(?im)^\s*\d+\s+passing\b",
+        r"(?im)^\s*✓\s+",
+        r"(?im)\btests?\s+passed\b",
+        r"(?im)\bpass(?:ed|es)?\b",
+    )
+    return any(re.search(pattern, output) for pattern in test_patterns)
 
 
 def _preflight_result(report: AgentReport, *, history: list[str]) -> UpgradeBackboneResult:

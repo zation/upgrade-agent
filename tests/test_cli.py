@@ -61,39 +61,31 @@ def test_add_tests_improve_prompt_repairs_baseline_then_adds_tests():
     assert "coverage improves" in skills.ADD_TESTS_IMPROVE
 
 
-def test_improve_tests_cli_uses_improve_prompt(monkeypatch, tmp_path):
-    calls: dict[str, object] = {}
+def test_improve_tests_green_existing_tests_exits_without_agent(monkeypatch, tmp_path):
+    def fail_create_client():
+        raise AssertionError("LLM client must not be created when existing tests already pass")
 
-    class FakeLoop:
-        def __init__(self, *, client, config, tools, workdir, callbacks):
-            calls["client"] = client
-            calls["config"] = config
-            calls["tools"] = tools
-            calls["workdir"] = workdir
-            calls["callbacks"] = callbacks
+    class FailLoop:
+        def __init__(self, **kwargs):
+            raise AssertionError("agent must not run when existing tests already pass")
 
-        def run(self, task: str):
-            calls["task"] = task
-            return SimpleNamespace(ok=True)
-
-    monkeypatch.setattr(cli, "create_client", lambda: "client")
-    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(cli, "create_client", fail_create_client)
+    monkeypatch.setattr(cli, "ReActLoop", FailLoop)
     monkeypatch.setattr(
         cli,
         "_run_test_baseline",
-        lambda workdir: cli._BaselineCommandResult(returncode=0, output="2 passing\n"),
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=0,
+            output="> project test\n> mocha\n\n  2 passing\n",
+        ),
     )
     runner = CliRunner()
 
     result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
 
     assert result.exit_code == 0
-    assert calls["config"].system_prompt == skills.ADD_TESTS_IMPROVE
-    assert "Improve tests for this focus area: cover PluginError" in calls["task"]
-    assert "The existing npm test baseline has already been run by the CLI" in calls["task"]
-    assert "Do not rerun npm test just to establish the baseline" in calls["task"]
-    assert calls["workdir"] == str(tmp_path.resolve())
-    assert calls["tools"]
+    assert "Existing npm test baseline is green" in result.output
+    assert "No new tests were added" in result.output
 
 
 def test_improve_tests_red_baseline_passes_structured_summary_to_agent(monkeypatch, tmp_path):
