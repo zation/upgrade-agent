@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import json
 import os
+import pty
 import re
+import select
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -406,6 +409,78 @@ def _extract_failure_lines(lines: list[str]) -> list[str]:
 
 
 def _run_test_baseline(workdir: str) -> _BaselineCommandResult:
+    try:
+        return _run_command_with_pty(["npm", "test"], workdir=workdir, timeout=120)
+    except OSError:
+        return _run_test_baseline_without_pty(workdir)
+
+
+def _run_command_with_pty(
+    command: list[str],
+    *,
+    workdir: str,
+    timeout: int,
+) -> _BaselineCommandResult:
+    master_fd, slave_fd = pty.openpty()
+    output_parts: list[bytes] = []
+    try:
+        proc = subprocess.Popen(
+            command,
+            cwd=workdir,
+            stdin=subprocess.DEVNULL,
+            stdout=slave_fd,
+            stderr=slave_fd,
+        )
+        os.close(slave_fd)
+        slave_fd = -1
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                proc.kill()
+                _drain_pty(master_fd, output_parts)
+                return _BaselineCommandResult(
+                    returncode=124,
+                    output=_decode_pty_output(output_parts) or "npm test timed out",
+                )
+            readable, _, _ = select.select([master_fd], [], [], min(0.1, remaining))
+            if master_fd in readable:
+                try:
+                    chunk = os.read(master_fd, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output_parts.append(chunk)
+            if proc.poll() is not None:
+                _drain_pty(master_fd, output_parts)
+                break
+        return _BaselineCommandResult(
+            returncode=proc.wait(),
+            output=_decode_pty_output(output_parts),
+        )
+    finally:
+        if slave_fd != -1:
+            os.close(slave_fd)
+        os.close(master_fd)
+
+
+def _drain_pty(master_fd: int, output_parts: list[bytes]) -> None:
+    while True:
+        try:
+            chunk = os.read(master_fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output_parts.append(chunk)
+
+
+def _decode_pty_output(output_parts: list[bytes]) -> str:
+    return b"".join(output_parts).decode(errors="replace")
+
+
+def _run_test_baseline_without_pty(workdir: str) -> _BaselineCommandResult:
     try:
         proc = subprocess.run(
             ["npm", "test"],

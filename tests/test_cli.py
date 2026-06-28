@@ -168,6 +168,28 @@ def test_improve_tests_writes_baseline_output_inside_project(monkeypatch, tmp_pa
     )
 
 
+def test_run_test_baseline_uses_pty_runner(monkeypatch):
+    calls: dict[str, object] = {}
+
+    def fake_pty_runner(command, *, workdir, timeout):
+        calls["command"] = command
+        calls["workdir"] = workdir
+        calls["timeout"] = timeout
+        return cli._BaselineCommandResult(returncode=2, output="1 failing\n")
+
+    monkeypatch.setattr(cli, "_run_command_with_pty", fake_pty_runner)
+
+    result = cli._run_test_baseline("/tmp/project")
+
+    assert result.returncode == 2
+    assert result.output == "1 failing\n"
+    assert calls == {
+        "command": ["npm", "test"],
+        "workdir": "/tmp/project",
+        "timeout": 120,
+    }
+
+
 def test_upgrade_graph_cli_is_removed(tmp_path):
     runner = CliRunner()
 
