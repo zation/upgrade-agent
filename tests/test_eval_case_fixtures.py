@@ -12,7 +12,7 @@ def test_core_workflow_eval_fixtures_exist_and_load() -> None:
         "sample-mocha-upgrade.json": "upgrade",
         "sample-upgrade-all.json": "upgrade-all",
         "sample-research-upgrade.json": "research-upgrade",
-        "sample-generate-tests.json": "generate-tests",
+        "sample-improve-tests.json": "improve-tests",
     }
 
     for filename, command_name in expected.items():

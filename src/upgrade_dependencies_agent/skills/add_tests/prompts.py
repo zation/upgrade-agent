@@ -58,14 +58,15 @@ Report a test gap list in this exact shape:
 ).render()
 
 
-ADD_TESTS_GENERATE = SkillPrompt(
+ADD_TESTS_IMPROVE = SkillPrompt(
     base=BASE_AGENT,
     contracts=(TEST_STYLE_RULE, BASELINE_RULE, VERIFY_RULE),
     sections=(
         PromptSection(
-            "Current task: generate tests",
+            "Current task: improve tests",
             """\
-You generate tests for existing JavaScript/TypeScript behavior. Follow the existing test style
+You improve tests for existing JavaScript/TypeScript behavior. First repair an
+existing failing test baseline when needed, then follow the existing test style
 and make the smallest useful test additions.""",
         ),
         PromptSection("Workflow", TEST_GENERATION_WORKFLOW),
@@ -73,6 +74,7 @@ and make the smallest useful test additions.""",
             "Report",
             """\
 - baseline test result
+- existing baseline repairs and why each was needed
 - tests added and which behavior each covers
 - final npm test result
 - whether coverage improves or could not be measured
@@ -81,8 +83,10 @@ and make the smallest useful test additions.""",
         PromptSection(
             "Rules",
             """\
-- Generate tests only; do not refactor production code unless a test exposes a
-  genuine pre-existing bug and the user explicitly asked you to fix it.
+- Repair existing failing tests or genuine pre-existing bugs only when required
+  to establish a green baseline before adding coverage.
+- Do not refactor production code unless a failing test exposes a genuine
+  pre-existing bug and the fix is the smallest way to make the baseline green.
 - Do not rewrite broad test files.
 - Do not change snapshots, lockfiles, or package versions unless the test command
   cannot run without an explicit, reported setup step.

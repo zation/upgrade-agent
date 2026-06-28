@@ -22,7 +22,8 @@ def test_help_lists_upgrade_all_command():
     assert result.exit_code == 0
     assert "upgrade-dependencies-agent" in result.output
     assert "analyze-coverage" in result.output
-    assert "generate-tests" in result.output
+    assert "improve-tests" in result.output
+    assert "generate-tests" not in result.output
     assert "research-upgrade" in result.output
     assert "upgrade-all" in result.output
     assert "upgrade-graph" not in result.output
@@ -49,14 +50,44 @@ def test_add_tests_analyze_prompt_is_read_only_gap_finder():
     assert "file / function / suggested test scenarios" in skills.ADD_TESTS_ANALYZE
 
 
-def test_add_tests_generate_prompt_requires_existing_style_and_verification():
-    assert hasattr(skills, "ADD_TESTS_GENERATE")
-    assert "generate tests" in skills.ADD_TESTS_GENERATE
-    assert "Follow the existing test style" in skills.ADD_TESTS_GENERATE
-    assert "test/*.test.js" in skills.ADD_TESTS_GENERATE
-    assert "If no npm test script exists" in skills.ADD_TESTS_GENERATE
-    assert "Run npm test" in skills.ADD_TESTS_GENERATE
-    assert "coverage improves" in skills.ADD_TESTS_GENERATE
+def test_add_tests_improve_prompt_repairs_baseline_then_adds_tests():
+    assert hasattr(skills, "ADD_TESTS_IMPROVE")
+    assert not hasattr(skills, "ADD_TESTS_GENERATE")
+    assert "repair an existing failing test baseline" in skills.ADD_TESTS_IMPROVE
+    assert "Follow the existing test style" in skills.ADD_TESTS_IMPROVE
+    assert "test/*.test.js" in skills.ADD_TESTS_IMPROVE
+    assert "If no npm test script exists" in skills.ADD_TESTS_IMPROVE
+    assert "Run npm test" in skills.ADD_TESTS_IMPROVE
+    assert "coverage improves" in skills.ADD_TESTS_IMPROVE
+
+
+def test_improve_tests_cli_uses_improve_prompt(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    class FakeLoop:
+        def __init__(self, *, client, config, tools, workdir, callbacks):
+            calls["client"] = client
+            calls["config"] = config
+            calls["tools"] = tools
+            calls["workdir"] = workdir
+            calls["callbacks"] = callbacks
+
+        def run(self, task: str):
+            calls["task"] = task
+            return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "create_client", lambda: "client")
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
+
+    assert result.exit_code == 0
+    assert calls["config"].system_prompt == skills.ADD_TESTS_IMPROVE
+    assert "Improve tests for this focus area: cover PluginError" in calls["task"]
+    assert "repair the existing failing tests" in calls["task"]
+    assert calls["workdir"] == str(tmp_path.resolve())
+    assert calls["tools"]
 
 
 def test_upgrade_graph_cli_is_removed(tmp_path):

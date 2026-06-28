@@ -2,7 +2,7 @@
 
     uv run upgrade-dependencies-agent analyze ../some-project
     uv run upgrade-dependencies-agent analyze-coverage ../some-project
-    uv run upgrade-dependencies-agent generate-tests ../some-project "cover src/foo edge cases"
+    uv run upgrade-dependencies-agent improve-tests ../some-project "cover src/foo edge cases"
     uv run upgrade-dependencies-agent research-upgrade ../some-project "mocha 4 -> 11"
     uv run upgrade-dependencies-agent upgrade ../some-project "mocha 4 -> 11"
     uv run upgrade-dependencies-agent upgrade-all ../some-project
@@ -11,7 +11,7 @@
 Commands:
 - ``analyze`` — read-only ReAct run that profiles a project.
 - ``analyze-coverage`` — read-only test-gap and coverage analysis.
-- ``generate-tests`` — add focused tests and verify them.
+- ``improve-tests`` — repair a failing test baseline, then add focused tests.
 - ``research-upgrade`` — read-only breaking-change research for one upgrade.
 - ``upgrade`` — LangGraph-backed upgrade of ONE dependency.
 - ``upgrade-all`` — graph-backed batch upgrade of direct dependencies.
@@ -45,7 +45,7 @@ from ..orchestrator import (
 from ..orchestrator.preflight import check_clean_worktree, dirty_worktree_status
 from ..skills import (
     ADD_TESTS_ANALYZE,
-    ADD_TESTS_GENERATE,
+    ADD_TESTS_IMPROVE,
     ANALYZE,
     BASE_AGENT,
     BREAKING_CHANGE_RESEARCHER,
@@ -156,8 +156,8 @@ def analyze_coverage(
     raise typer.Exit(code=0 if result.ok else 1)
 
 
-@app.command("generate-tests")
-def generate_tests(
+@app.command("improve-tests")
+def improve_tests(
     project: Path = typer.Argument(..., help="Path to the target project."),
     focus: str = typer.Argument(
         "highest-priority uncovered behavior",
@@ -167,16 +167,16 @@ def generate_tests(
     max_iterations: int = typer.Option(45, "--max-iters"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Generate focused tests, then verify npm test and coverage if available."""
+    """Repair the test baseline if needed, add focused tests, then verify."""
     workdir = _resolve_workdir(project)
-    console.rule(f"[bold]generating tests[/bold] in {workdir}")
+    console.rule(f"[bold]improving tests[/bold] in {workdir}")
 
     client = create_client()
     loop = ReActLoop(
         client=client,
         config=AgentConfig(
             model=model,
-            system_prompt=ADD_TESTS_GENERATE,
+            system_prompt=ADD_TESTS_IMPROVE,
             max_iterations=max_iterations,
         ),
         tools=default_tools(),
@@ -184,11 +184,14 @@ def generate_tests(
         callbacks=RichUI(verbose=verbose),
     )
     task = (
-        f"Generate tests for this focus area: {focus}.\n\n"
-        "Start by establishing the existing npm test baseline, inspect current "
-        "test style and coverage signals, add a focused reviewable batch of "
-        "tests, verify with npm test, check coverage if available, then report "
-        "the final result and remaining gaps."
+        f"Improve tests for this focus area: {focus}.\n\n"
+        "Start by establishing the existing npm test baseline. If it is red, "
+        "repair the existing failing tests or genuine pre-existing bug with the "
+        "smallest targeted edit, then rerun npm test until the baseline is green. "
+        "After that, inspect current test style and coverage signals, add a "
+        "focused reviewable batch of tests, verify with npm test, check coverage "
+        "if available, then report baseline repairs, tests added, final result, "
+        "and remaining gaps."
     )
     result = loop.run(task)
     raise typer.Exit(code=0 if result.ok else 1)

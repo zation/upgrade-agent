@@ -129,7 +129,7 @@ Safety and cost controls:
 |---|---|
 | `analyze` | Read-only project and dependency risk analysis. |
 | `analyze-coverage` | Read-only test-gap analysis. |
-| `generate-tests` | Add focused tests and verify them. |
+| `improve-tests` | Repair a failing test baseline, add focused tests, and verify them. |
 | `research-upgrade` | Read-only dependency upgrade research. |
 | `upgrade` | LangGraph-backed single-dependency upgrade. |
 | `upgrade-all` | Batch upgrade of direct dependencies. |

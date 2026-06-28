@@ -44,7 +44,7 @@ uv run pytest -v
 # Run the agent. Replace ../target-project with the target project directory.
 uv run upgrade-dependencies-agent analyze ../target-project
 uv run upgrade-dependencies-agent analyze-coverage ../target-project
-uv run upgrade-dependencies-agent generate-tests ../target-project "cover uncovered behavior"
+uv run upgrade-dependencies-agent improve-tests ../target-project "cover uncovered behavior"
 uv run upgrade-dependencies-agent research-upgrade ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade ../target-project "mocha 4 -> 11"
 uv run upgrade-dependencies-agent upgrade-all ../target-project
