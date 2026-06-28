@@ -172,6 +172,8 @@ def improve_tests(
     """Repair the test baseline if needed, add focused tests, then verify."""
     workdir = _resolve_workdir(project)
     console.rule(f"[bold]improving tests[/bold] in {workdir}")
+    baseline = _run_test_baseline(workdir)
+    baseline_output_path = _write_improve_tests_baseline_output(workdir, baseline.output)
 
     client = create_client()
     loop = ReActLoop(
@@ -185,16 +187,7 @@ def improve_tests(
         workdir=workdir,
         callbacks=RichUI(verbose=verbose),
     )
-    task = (
-        f"Improve tests for this focus area: {focus}.\n\n"
-        "Start by establishing the existing npm test baseline. If it is red, "
-        "repair the existing failing tests or genuine pre-existing bug with the "
-        "smallest targeted edit, then rerun npm test until the baseline is green. "
-        "After that, inspect current test style and coverage signals, add a "
-        "focused reviewable batch of tests, verify with npm test, check coverage "
-        "if available, then report baseline repairs, tests added, final result, "
-        "and remaining gaps."
-    )
+    task = _improve_tests_task(focus, baseline=baseline, baseline_output_path=baseline_output_path)
     result = loop.run(task)
     raise typer.Exit(code=0 if result.ok else 1)
 
@@ -308,6 +301,86 @@ def _upgrade_cli_preflight(workdir: str) -> UpgradeBackboneResult | None:
 class _BaselineCommandResult:
     returncode: int
     output: str
+
+
+def _write_improve_tests_baseline_output(workdir: str, output: str) -> str:
+    relative_path = Path(".upgrade-agent") / "tmp" / "improve-tests-baseline.txt"
+    output_path = Path(workdir) / relative_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output, encoding="utf-8")
+    return relative_path.as_posix()
+
+
+def _improve_tests_task(
+    focus: str,
+    *,
+    baseline: _BaselineCommandResult,
+    baseline_output_path: str,
+) -> str:
+    baseline_red = baseline.returncode != 0 or _baseline_output_indicates_failure(baseline.output)
+    summary = _summarize_test_baseline(baseline)
+    if baseline_red:
+        return (
+            f"Improve tests for this focus area: {focus}.\n\n"
+            "The existing npm test baseline has already been run by the CLI. "
+            "Repair only the existing failing baseline first. Do not add new tests "
+            "or inspect coverage until npm test is green.\n\n"
+            f"Baseline command: npm test\nExit code: {baseline.returncode}\n"
+            f"Full baseline output: {baseline_output_path}\n\n"
+            f"Structured baseline summary:\n{summary}\n\n"
+            "Use the summary and full output path instead of rerunning npm test just "
+            "to discover the same failures. Read the failing test files and related "
+            "source, make the smallest targeted repair, then rerun npm test once to "
+            "verify the repair. Report the baseline repairs and final npm test result."
+        )
+    return (
+        f"Improve tests for this focus area: {focus}.\n\n"
+        "The existing npm test baseline has already been run by the CLI and is green. "
+        f"Baseline command: npm test\nExit code: {baseline.returncode}\n"
+        f"Full baseline output: {baseline_output_path}\n\n"
+        f"Structured baseline summary:\n{summary}\n\n"
+        "Do not rerun npm test just to establish the baseline. Inspect current test "
+        "style and coverage signals, add a focused reviewable batch of tests, verify "
+        "with npm test after meaningful additions, check coverage if available, then "
+        "report tests added, final result, and remaining gaps."
+    )
+
+
+def _summarize_test_baseline(baseline: _BaselineCommandResult) -> str:
+    lines = baseline.output.splitlines()
+    summary_lines = [
+        line.strip()
+        for line in lines
+        if re.search(r"\b(passing|failing|failed|failures?|tests?)\b", line, re.IGNORECASE)
+    ]
+    failure_lines = _extract_failure_lines(lines)
+    path_lines = [
+        line.strip()
+        for line in lines
+        if re.search(r"\b(?:test|tests|spec|__tests__)/[^:\s)]+", line)
+    ]
+    parts = [f"Exit code: {baseline.returncode}"]
+    if summary_lines:
+        parts.append("Counts and status:\n" + "\n".join(summary_lines[-12:]))
+    if failure_lines:
+        parts.append("Likely failures:\n" + "\n".join(failure_lines[:12]))
+    if path_lines:
+        parts.append("Project test/source references:\n" + "\n".join(path_lines[:12]))
+    parts.append("Output tail:\n" + _tail_text(baseline.output, limit=1800))
+    return "\n\n".join(parts)
+
+
+def _extract_failure_lines(lines: list[str]) -> list[str]:
+    failures: list[str] = []
+    for index, line in enumerate(lines):
+        if re.match(r"^\s*\d+\)\s+", line):
+            chunk = [line.strip()]
+            for follow in lines[index + 1 : index + 5]:
+                stripped = follow.strip()
+                if stripped:
+                    chunk.append(stripped)
+            failures.append(" ".join(chunk))
+    return failures
 
 
 def _run_test_baseline(workdir: str) -> _BaselineCommandResult:

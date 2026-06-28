@@ -78,6 +78,11 @@ def test_improve_tests_cli_uses_improve_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "create_client", lambda: "client")
     monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(returncode=0, output="2 passing\n"),
+    )
     runner = CliRunner()
 
     result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
@@ -85,9 +90,86 @@ def test_improve_tests_cli_uses_improve_prompt(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert calls["config"].system_prompt == skills.ADD_TESTS_IMPROVE
     assert "Improve tests for this focus area: cover PluginError" in calls["task"]
-    assert "repair the existing failing tests" in calls["task"]
+    assert "The existing npm test baseline has already been run by the CLI" in calls["task"]
+    assert "Do not rerun npm test just to establish the baseline" in calls["task"]
     assert calls["workdir"] == str(tmp_path.resolve())
     assert calls["tools"]
+
+
+def test_improve_tests_red_baseline_passes_structured_summary_to_agent(monkeypatch, tmp_path):
+    calls: dict[str, object] = {}
+
+    class FakeLoop:
+        def __init__(self, *, client, config, tools, workdir, callbacks):
+            calls["config"] = config
+            calls["workdir"] = workdir
+
+        def run(self, task: str):
+            calls["task"] = task
+            return SimpleNamespace(ok=True)
+
+    baseline_output = """
+  beep()
+    1) should send the right code to stdout
+
+  2 passing
+  1 failing
+
+  1) beep()
+       should send the right code to stdout:
+     AssertionError: expected undefined to equal '\x07'
+      at Context.<anonymous> (test/beep.js:15:25)
+"""
+
+    monkeypatch.setattr(cli, "create_client", lambda: "client")
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(returncode=1, output=baseline_output),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path), "cover PluginError"])
+
+    assert result.exit_code == 0
+    task = str(calls["task"])
+    assert "The existing npm test baseline has already been run by the CLI" in task
+    assert "Repair only the existing failing baseline first" in task
+    assert "Do not add new tests or inspect coverage until npm test is green" in task
+    assert "test/beep.js" in task
+    assert "should send the right code to stdout" in task
+    assert ".upgrade-agent/tmp/improve-tests-baseline.txt" in task
+    assert "Start by establishing the existing npm test baseline" not in task
+
+
+def test_improve_tests_writes_baseline_output_inside_project(monkeypatch, tmp_path):
+    class FakeLoop:
+        def __init__(self, **kwargs):
+            pass
+
+        def run(self, task: str):
+            return SimpleNamespace(ok=True)
+
+    monkeypatch.setattr(cli, "create_client", lambda: "client")
+    monkeypatch.setattr(cli, "ReActLoop", FakeLoop)
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=1,
+            output="1 failing\n1) log()\n   AssertionError: expected x\n",
+        ),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["improve-tests", str(tmp_path)])
+
+    assert result.exit_code == 0
+    output_path = tmp_path / ".upgrade-agent" / "tmp" / "improve-tests-baseline.txt"
+    assert output_path.read_text(encoding="utf-8") == (
+        "1 failing\n1) log()\n   AssertionError: expected x\n"
+    )
 
 
 def test_upgrade_graph_cli_is_removed(tmp_path):
