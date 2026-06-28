@@ -137,6 +137,10 @@ def test_improve_tests_red_baseline_passes_structured_summary_to_agent(monkeypat
     assert "The existing npm test baseline has already been run by the CLI" in task
     assert "Repair only the existing failing baseline first" in task
     assert "Do not add new tests or inspect coverage until npm test is green" in task
+    assert "Focused repair loop" in task
+    assert "Work on one failing test or one failing test file at a time" in task
+    assert "Run at most two diagnostic commands before making a minimal edit" in task
+    assert "After each edit, run the narrowest relevant test command first" in task
     assert "test/beep.js" in task
     assert "should send the right code to stdout" in task
     assert ".upgrade-agent/tmp/improve-tests-baseline.txt" in task
