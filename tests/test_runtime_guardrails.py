@@ -371,6 +371,7 @@ def test_shell_guardrail_blocks_writes_outside_workdir_after_green_baseline(
     assert result.ok
     assert not outside_file.exists()
     assert "outside the target project" in _last_tool_result_content(result)
+    assert ".upgrade-agent/tmp/" in _last_tool_result_content(result)
 
 
 def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
@@ -395,6 +396,38 @@ def test_revert_guardrail_allows_read_only_git_diff_after_green_baseline(
 
     assert result.ok
     assert "$ git diff --name-only" in _last_tool_result_content(result)
+
+
+def test_shell_guardrail_allows_project_local_temp_output_after_green_baseline(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"true"}}', encoding="utf-8")
+    client = FakeClient(
+        [
+            _tool_response("run_command", {"command": "npm test"}),
+            _tool_response(
+                "run_command",
+                {
+                    "command": (
+                        "mkdir -p .upgrade-agent/tmp && "
+                        "npx mocha --reporter spec > .upgrade-agent/tmp/mocha_output.txt"
+                    )
+                },
+            ),
+            _done_response(),
+        ]
+    )
+    loop = ReActLoop(
+        client=client,
+        config=AgentConfig(system_prompt="", max_iterations=3, enforce_baseline_guardrail=True),
+        tools=default_tools(),
+        workdir=str(tmp_path),
+    )
+
+    result = loop.run("baseline then project local temp output")
+
+    assert result.ok
+    assert "unsafe shell command" not in _last_tool_result_content(result)
 
 
 def test_react_loop_passes_response_format_to_client(tmp_path: Path) -> None:

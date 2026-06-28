@@ -85,6 +85,7 @@ def test_upgrade_prompts_do_not_repeat_contract_rules_in_legacy_rules_section() 
 def test_base_agent_keeps_global_principles_not_tool_inventory() -> None:
     assert "Core operating principles:" in BASE_AGENT
     assert "You have tools for" not in BASE_AGENT
+    assert ".upgrade-agent/tmp/" in BASE_AGENT
 
 
 def test_upgrade_and_research_share_breaking_change_research_workflow() -> None:

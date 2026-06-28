@@ -200,7 +200,10 @@ def _unsafe_shell_reason(command: str, workdir: str) -> str | None:
 
     outside_path = _outside_project_write_target(command, workdir)
     if outside_path is not None:
-        return f"Shell command writes outside the target project: {outside_path}"
+        return (
+            f"Shell command writes outside the target project: {outside_path}. "
+            "Use a project-local temporary path such as .upgrade-agent/tmp/output.txt."
+        )
     return None
 
 
