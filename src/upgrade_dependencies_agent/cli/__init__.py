@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -281,7 +282,7 @@ def _upgrade_cli_preflight(workdir: str) -> UpgradeBackboneResult | None:
         return _preflight_result(report, history=["preflight:dirty_worktree"])
 
     baseline = _run_test_baseline(workdir)
-    if baseline.returncode != 0:
+    if baseline.returncode != 0 or _baseline_output_indicates_failure(baseline.output):
         summary = (
             "Target test baseline failed before upgrade. "
             "Dependency upgrades require existing tests to pass first.\n\n"
@@ -331,6 +332,16 @@ def _run_test_baseline(workdir: str) -> _BaselineCommandResult:
 
 def _tail_text(text: str, *, limit: int = 3000) -> str:
     return text if len(text) <= limit else text[-limit:]
+
+
+def _baseline_output_indicates_failure(output: str) -> bool:
+    failure_patterns = (
+        r"(?im)^\s*\d+\s+failing\b",
+        r"(?im)^\s*\d+\)\s+\S",
+        r"(?im)^\s*(fail|failed|failure):\s+",
+        r"(?im)\btests?\s+failed\b",
+    )
+    return any(re.search(pattern, output) for pattern in failure_patterns)
 
 
 def _preflight_result(report: AgentReport, *, history: list[str]) -> UpgradeBackboneResult:

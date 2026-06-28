@@ -210,6 +210,35 @@ def test_upgrade_cli_reports_failing_test_baseline_before_workflow(monkeypatch, 
     )
 
 
+def test_upgrade_cli_reports_mocha_failure_markers_even_with_zero_exit(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(cli, "check_clean_worktree", lambda workdir: SimpleNamespace(ok=True))
+    monkeypatch.setattr(
+        cli,
+        "_run_test_baseline",
+        lambda workdir: cli._BaselineCommandResult(
+            returncode=0,
+            output="""
+  PluginError()
+    1) should print the plugin name in toString
+    2) should not include the stack by default in toString
+  beep()
+""",
+        ),
+    )
+
+    result = cli._upgrade_cli_preflight(str(tmp_path))
+
+    assert result is not None
+    assert result.report is not None
+    assert result.report.ok is False
+    assert result.report.failure_reason == "baseline_failed"
+    assert "Target test baseline failed before upgrade" in result.report.summary
+    assert "improve-tests" in result.report.recovery_suggestions[0]
+
+
 def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
     report_path = tmp_path / "report.json"
 
