@@ -27,6 +27,7 @@ import json
 import os
 import subprocess
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -239,6 +240,10 @@ def _run_upgrade_backbone_cli(
     workdir: str,
     ui: RichUI,
 ) -> UpgradeBackboneResult:
+    preflight_result = _upgrade_cli_preflight(workdir)
+    if preflight_result is not None:
+        return preflight_result
+
     client = create_client()
     result = run_upgrade_backbone_workflow(
         target,
@@ -253,6 +258,94 @@ def _run_upgrade_backbone_cli(
         collect_changed_files=lambda: _changed_worktree_paths(workdir),
     )
     return result
+
+
+def _upgrade_cli_preflight(workdir: str) -> UpgradeBackboneResult | None:
+    clean_result = check_clean_worktree(workdir)
+    if not clean_result.ok:
+        summary = (
+            "Target git worktree is not clean before upgrade. "
+            f"git status --porcelain:\n{clean_result.details}"
+        )
+        report = AgentReport(
+            ok=False,
+            summary=summary,
+            changed_files=_changed_worktree_paths(workdir) or [],
+            remaining_risks=["upgrade requires a clean target git worktree"],
+            failure_reason="dirty_worktree",
+            recovery_suggestions=[
+                "Commit, stash, or remove existing changes before running upgrade.",
+                "Review git status to avoid mixing old edits with dependency upgrade changes.",
+            ],
+        )
+        return _preflight_result(report, history=["preflight:dirty_worktree"])
+
+    baseline = _run_test_baseline(workdir)
+    if baseline.returncode != 0:
+        summary = (
+            "Target test baseline failed before upgrade. "
+            "Dependency upgrades require existing tests to pass first.\n\n"
+            f"$ npm test\n[exit {baseline.returncode}]\n{_tail_text(baseline.output)}"
+        )
+        report = AgentReport(
+            ok=False,
+            summary=summary,
+            changed_files=[],
+            remaining_risks=["target test baseline is red before dependency upgrade"],
+            failure_reason="baseline_failed",
+            recovery_suggestions=[
+                "Run improve-tests to repair the existing test baseline, then rerun upgrade.",
+                "Fix the existing tests manually, then rerun upgrade.",
+            ],
+        )
+        return _preflight_result(report, history=["preflight:baseline_failed"])
+
+    return None
+
+
+@dataclass(frozen=True)
+class _BaselineCommandResult:
+    returncode: int
+    output: str
+
+
+def _run_test_baseline(workdir: str) -> _BaselineCommandResult:
+    try:
+        proc = subprocess.run(
+            ["npm", "test"],
+            cwd=workdir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        output = (exc.stdout or "") + (exc.stderr or "")
+        return _BaselineCommandResult(returncode=124, output=output or "npm test timed out")
+    except OSError as exc:
+        return _BaselineCommandResult(returncode=127, output=f"Failed to run npm test: {exc}")
+    return _BaselineCommandResult(
+        returncode=proc.returncode,
+        output=(proc.stdout or "") + (proc.stderr or ""),
+    )
+
+
+def _tail_text(text: str, *, limit: int = 3000) -> str:
+    return text if len(text) <= limit else text[-limit:]
+
+
+def _preflight_result(report: AgentReport, *, history: list[str]) -> UpgradeBackboneResult:
+    return UpgradeBackboneResult(
+        ok=False,
+        state={
+            "phase": "done",
+            "report": report,
+            "changed_files": report.changed_files,
+            "history": history,
+        },
+        report=report,
+        heal_attempts=0,
+        history=tuple(history),
+    )
 
 
 def _run_upgrade_dry_run_cli(
@@ -319,6 +412,10 @@ def _run_upgrade_all_backbone_cli(
     workdir: str,
     ui: RichUI,
 ) -> UpgradeBackboneResult:
+    preflight_result = _upgrade_cli_preflight(workdir)
+    if preflight_result is not None:
+        return preflight_result
+
     client = create_client()
     result = run_upgrade_all_backbone_workflow(
         max_heal_attempts=max_heal_attempts,
@@ -470,6 +567,17 @@ def _print_report_json(result: UpgradeBackboneResult, *, workdir: str) -> None:
     typer.echo(json.dumps(report, ensure_ascii=False))
 
 
+def _print_failure_report(result: UpgradeBackboneResult) -> None:
+    report = result.report
+    if report is None:
+        return
+    console.print(f"[bold red]Failed:[/bold red] {report.summary}")
+    if report.recovery_suggestions:
+        console.print("[bold]Suggestions:[/bold]")
+        for suggestion in report.recovery_suggestions:
+            console.print(f"- {suggestion}")
+
+
 def _explicit_upgrade_targets(target: str) -> list[str]:
     return [part.strip() for part in target.split(",") if part.strip()]
 
@@ -580,6 +688,8 @@ def upgrade(
         _write_report_json(result, report_json, workdir=workdir)
     if output_json:
         _print_report_json(result, workdir=workdir)
+    elif not result.ok:
+        _print_failure_report(result)
     raise typer.Exit(code=0 if result.ok else 1)
 
 
@@ -623,6 +733,8 @@ def upgrade_all(
         _write_report_json(result, report_json, workdir=workdir)
     if output_json:
         _print_report_json(result, workdir=workdir)
+    elif not result.ok:
+        _print_failure_report(result)
     raise typer.Exit(code=0 if result.ok else 1)
 
 

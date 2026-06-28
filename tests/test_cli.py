@@ -111,6 +111,7 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11"])
@@ -120,6 +121,93 @@ def test_upgrade_cli_uses_backbone_workflow(monkeypatch, tmp_path):
     assert calls["max_heal_attempts"] == 1
     assert callable(calls["run_loop"])
     assert callable(calls["collect_changed_files"])
+
+
+def test_upgrade_cli_reports_dirty_worktree_before_baseline(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a dirty worktree")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
+
+    assert result.exit_code == 1
+    report = json.loads(result.output)
+    assert report["ok"] is False
+    assert report["failure_reason"] == "dirty_worktree"
+    assert "Target git worktree is not clean" in report["summary"]
+    assert any(
+        "Commit, stash, or remove existing changes" in suggestion
+        for suggestion in report["recovery_suggestions"]
+    )
+    assert "package.json" in report["summary"]
+
+
+def test_upgrade_cli_prints_preflight_failure_guidance(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a dirty worktree")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11"])
+
+    assert result.exit_code == 1
+    assert "Target git worktree is not clean" in result.output
+    assert "Commit, stash, or remove existing changes" in result.output
+
+
+def test_upgrade_cli_reports_failing_test_baseline_before_workflow(monkeypatch, tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "package.json").write_text(
+        '{"scripts": {"test": "node -e \\"process.exit(1)\\""}}',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "baseline"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    def fail_workflow(*args, **kwargs):
+        raise AssertionError("upgrade workflow must not run for a red baseline")
+
+    monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fail_workflow, raising=False)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
+
+    assert result.exit_code == 1
+    report = json.loads(result.output)
+    assert report["ok"] is False
+    assert report["failure_reason"] == "baseline_failed"
+    assert "Target test baseline failed before upgrade" in report["summary"]
+    assert "improve-tests" in report["recovery_suggestions"][0]
+    assert any(
+        "Fix the existing tests manually" in suggestion
+        for suggestion in report["recovery_suggestions"]
+    )
 
 
 def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
@@ -140,6 +228,7 @@ def test_upgrade_cli_writes_structured_report(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -173,6 +262,7 @@ def test_upgrade_cli_prints_machine_readable_json(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha 4 -> 11", "--json"])
@@ -241,6 +331,7 @@ def test_upgrade_cli_runs_explicit_dependency_list_sequentially(monkeypatch, tmp
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
@@ -274,6 +365,7 @@ def test_upgrade_cli_reports_failed_explicit_dependency(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade", str(tmp_path), "mocha, nyc", "--json"])
@@ -296,6 +388,7 @@ def test_upgrade_all_cli_uses_batch_backbone_workflow(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path)])
@@ -324,6 +417,7 @@ def test_upgrade_all_cli_writes_structured_report(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--report-json", str(report_path)])
@@ -350,6 +444,7 @@ def test_upgrade_all_cli_prints_machine_readable_json(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli, "run_upgrade_all_backbone_workflow", fake_workflow, raising=False)
     monkeypatch.setattr(cli, "create_client", lambda: object())
+    monkeypatch.setattr(cli, "_upgrade_cli_preflight", lambda workdir: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["upgrade-all", str(tmp_path), "--json"])
